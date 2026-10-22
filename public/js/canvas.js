@@ -5,7 +5,7 @@
 // canvas fits the window, drawn smaller when it must; zoomed in, it scrolls.
 import { html, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "../vendor/preact-htm.js"
 import { Actions, BackgroundChip, Context, PendingChip, PrChip, StateIcon, UsageMeter, ageText, onOpenKey, stateOf, urgencyOf } from "./components.js"
-import { CARD_H, CARD_W, ENTRY, GRID, dragHandler, layout, onCanvas, snap } from "./canvas-layout.js"
+import { CARD_H, CARD_W, ENTRY, GRID, dragHandler, layout, newZone, onCanvas, snap } from "./canvas-layout.js"
 import { Note, follow, keyOf, newNote } from "./canvas-notes.js"
 import { Ctx } from "./ctx.js"
 import { Icon } from "./icons.js"
@@ -136,10 +136,10 @@ function CanvasCard({ card, at, scale, onDropped, z, isPicked = false, onPick, g
   </article>`
 }
 
-function Zone({ zone, scale, bounds, onChange, onRemove, onMoveWith }) {
+function Zone({ zone, scale, bounds, onChange, onRemove, onMoveWith, isNew = false }) {
   const ref = useRef()
   const nameField = useRef()
-  const [isEditing, setEditing] = useState(false)
+  const [isEditing, setEditing] = useState(isNew) // a zone just drawn asks for its name
   // Enter keeps the name and Esc drops it. Both end in a blur (the field goes
   // away), which must neither save twice nor save what Esc dropped.
   const isSettled = useRef(false)
@@ -217,7 +217,7 @@ const SPACE_KEEPS = "button, a[href], summary, input, [role=button], [role=check
 const DONE_HEAD = 48
 const DONE_H = DONE_HEAD + CARD_H // the "Done" band: one row, at the bottom
 
-export function Canvas({ cards, zones: savedZones, notes: savedNotes }) {
+export function Canvas({ cards, zones: savedZones, notes: savedNotes, isDrawingZone = false, onZoneDrawn }) {
   const ui = useContext(Ctx)
   const [local, setLocal] = useState({})
   const [zones, setZones] = useState(savedZones)
@@ -443,6 +443,54 @@ export function Canvas({ cards, zones: savedZones, notes: savedNotes }) {
     post("/api/canvas/zones", { zones: list })
   }
 
+  // ---- drawing a new zone ----
+  // With "Zone" on, a layer over the canvas takes the next drag, over cards
+  // and notes too, and draws the zone there; a click gives one of the usual
+  // size. Esc, the button again or another view cancels.
+  const [draft, setDraft] = useState(null) // the zone being drawn, in canvas units
+  const [newZoneId, setNewZoneId] = useState(null)
+  const drawn = useRef(onZoneDrawn)
+  drawn.current = onZoneDrawn
+  useEffect(() => () => drawn.current?.(), [])
+  useLayoutEffect(() => {
+    if (!isDrawingZone) return
+    const onKey = e => e.key === "Escape" && (e.stopPropagation(), drawn.current?.())
+    window.addEventListener("keydown", onKey, true)
+    return () => window.removeEventListener("keydown", onKey, true)
+  }, [isDrawingZone])
+  const startZone = e => {
+    if (e.button !== 0) return
+    e.preventDefault()
+    const r0 = e.currentTarget.parentElement.getBoundingClientRect()
+    const toWorld = ev => ({
+      x: Math.min(Math.max((ev.clientX - r0.left) / scale, 0), bounds.w),
+      y: Math.min(Math.max((ev.clientY - r0.top) / scale, 0), bounds.h),
+    })
+    const a = toWorld(e)
+    let b = { x0: a.x, y0: a.y }
+    const move = ev => {
+      const p = toWorld(ev)
+      b = { x0: a.x, y0: a.y, x1: p.x, y1: p.y }
+      setDraft(b)
+    }
+    const off = () => {
+      window.removeEventListener("pointermove", move)
+      window.removeEventListener("pointerup", up)
+      detach.current = null
+    }
+    const up = () => {
+      off()
+      setDraft(null)
+      const zone = newZone(b, bounds)
+      setNewZoneId(zone.id)
+      saveZones([...zones, zone])
+      drawn.current?.()
+    }
+    window.addEventListener("pointermove", move)
+    window.addEventListener("pointerup", up)
+    detach.current = off
+  }
+
   // A zone carries the cards whose centre lies inside it when the drag starts.
   const moveWith = (zone, dx, dy, isDrop) => {
     const isIn = (cx, cy) => cx >= zone.x && cx <= zone.x + zone.w && cy >= zone.y && cy <= zone.y + zone.h
@@ -659,7 +707,7 @@ export function Canvas({ cards, zones: savedZones, notes: savedNotes }) {
       ${zones.map(
         z => html`<${Zone} key=${z.id} zone=${z} scale=${scale} bounds=${bounds} onMoveWith=${moveWith}
           onChange=${next => saveZones(zones.map(x => (x.id === next.id ? next : x)))}
-          onRemove=${gone => saveZones(zones.filter(x => x.id !== gone.id))} />`,
+          onRemove=${gone => saveZones(zones.filter(x => x.id !== gone.id))} isNew=${z.id === newZoneId} />`,
       )}
       ${shown.map(
         ({ note: n, at, card }) => html`<${Note} key=${n.id} note=${n} at=${at} card=${card} scale=${scale} bounds=${bounds}
@@ -670,6 +718,8 @@ export function Canvas({ cards, zones: savedZones, notes: savedNotes }) {
       )}
       ${openCards.map(card => html`<${CanvasCard} key=${card.id} card=${card} at=${pos[card.id]} scale=${scale} onDropped=${dropped}
         isPicked=${picked.has(`c:${card.id}`)} onPick=${isAdding => pick(`c:${card.id}`, isAdding)} group=${groupFor(`c:${card.id}`)} />`)}
+      ${isDrawingZone && html`<div class="zone-draw" style=${`height:${doneTop}px`} onPointerDown=${startZone}></div>`}
+      ${draft && html`<div class="zone zone-draft" style=${`left:${Math.min(draft.x0, draft.x1)}px;top:${Math.min(draft.y0, draft.y1)}px;width:${Math.abs(draft.x1 - draft.x0)}px;height:${Math.abs(draft.y1 - draft.y0)}px;--hue:${hue("New zone")}`}></div>`}
       ${box && html`<div class="select-box" style=${`left:${Math.min(box.x0, box.x1)}px;top:${Math.min(box.y0, box.y1)}px;width:${Math.abs(box.x1 - box.x0)}px;height:${Math.abs(box.y1 - box.y0)}px`}></div>`}
       <section class="done-area" style=${`top:${doneTop}px`}>
         <header class="done-head" data-fly="done">
@@ -691,6 +741,7 @@ export function Canvas({ cards, zones: savedZones, notes: savedNotes }) {
       <span class="done-hint">Drop here to mark it as done</span>
       <span class="dock-chips">${done.map(card => html`<button key=${card.id} class="tag" onClick=${() => ui.openReader(card.id)}>${card.title}</button>`)}</span>
     </div>`}
+    ${isDrawingZone && !draft && html`<div class="zone-draw-hint">Drag to draw the zone · Esc to cancel</div>`}
     <div class="zoom-ctl" title="Zoom: pinch on the trackpad or ⌘ + wheel · keys + − 0. Zooming out gives more room">
       <button class="icon-btn" disabled=${scale <= minZoom + 0.001} onClick=${() => zoomTo(scale / 1.2)} aria-label="Zoom out">−</button>
       <span class="zoom-pct">${Math.round(scale * 100)}%</span>

@@ -2,7 +2,7 @@
 import { html, render, useCallback, useEffect, useMemo, useRef, useState } from "../vendor/preact-htm.js"
 import { Board, Inbox, SearchResults } from "./board.js"
 import { Canvas } from "./canvas.js"
-import { canvasOrder, newZone } from "./canvas-layout.js"
+import { canvasOrder } from "./canvas-layout.js"
 import { newNote } from "./canvas-notes.js"
 import { Ctx, Kbd } from "./ctx.js"
 import { Digest, Help, NewSession } from "./dialogs.js"
@@ -68,6 +68,7 @@ function App() {
   const [dialog, setDialog] = useState(null) // "new" | "help" | "digest"
   const [runFor, setRunFor] = useState(null) // the card whose "Run" window is open
   const [isSideOpen, setSideOpen] = useState(false)
+  const [isDrawingZone, setDrawingZone] = useState(false) // the next drag on the canvas draws a zone
   // The canvas needs room; on a phone the inbox stands in for it.
   const [isNarrow, setNarrow] = useState(() => matchMedia("(max-width: 860px)").matches)
   // The conversation panel's width: yours when you dragged its edge, wide
@@ -97,7 +98,7 @@ function App() {
   const composerFocus = useRef(null)
   const searchBox = useRef()
 
-  const setView = v => (setViewRaw(v), keep("view", v))
+  const setView = v => (setViewRaw(v), keep("view", v), setDrawingZone(false))
   const setRepoFilter = r => (setRepoFilterRaw(r), keep("repoFilter", r), setSideOpen(false))
   const setShowDone = v => (setShowDoneRaw(v), keep("showDone", v))
   const setGroupBy = v => (setGroupByRaw(v), keep("groupBy", v))
@@ -591,8 +592,8 @@ function App() {
             <button class=${groupBy !== "repo" ? "on" : ""} onClick=${() => setGroupBy("none")} title="No grouping (G)">Columns</button>
             <button class=${groupBy === "repo" ? "on" : ""} onClick=${() => setGroupBy("repo")} title="Lanes per repo (G)">By repo</button>
           </div>`}
-          ${view === "canvas" && !query && html`<button class="btn" title="Add a named zone to group cards"
-            onClick=${() => post("/api/canvas/zones", { zones: [...(data?.zones ?? []), newZone(data?.zones ?? [])] })}>
+          ${view === "canvas" && !query && html`<button class=${`btn ${isDrawingZone ? "on" : ""}`} aria-pressed=${isDrawingZone}
+            title="Draw a named zone on the canvas to group cards (Esc cancels)" onClick=${() => setDrawingZone(!isDrawingZone)}>
             <${Icon} name="plus" size=${14} /><span class="lbl">Zone</span></button>`}
           ${view === "canvas" && !query && html`<button class="btn" title="Add a note (or double-click the empty canvas)"
             onClick=${() => post("/api/canvas/notes", { notes: [...(data?.notes ?? []), newNote(data?.notes ?? [])] })}>
@@ -609,7 +610,8 @@ function App() {
               : view === "board"
                 ? html`<${Board} cards=${cards} showDone=${showDone} groupBy=${groupBy} repos=${data.repos} />`
                 : view === "canvas"
-                  ? html`<${Canvas} cards=${cards} zones=${data.zones ?? []} notes=${data.notes ?? []} />`
+                  ? html`<${Canvas} cards=${cards} zones=${data.zones ?? []} notes=${data.notes ?? []}
+                      isDrawingZone=${isDrawingZone} onZoneDrawn=${() => setDrawingZone(false)} />`
                   : html`<${Inbox} cards=${cards} showDone=${showDone} />`}
         </div>
       </main>

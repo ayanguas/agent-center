@@ -40,15 +40,19 @@ export function canvasOrder(cards) {
 }
 
 // A new zone right of "Incoming", nudged so new ones do not stack exactly.
-export function newZone(zones) {
-  const n = zones.length
+// A zone drawn from (x0, y0) to (x1, y1) on the canvas, kept inside `bounds`.
+// A click (no box drawn) gives a zone of the usual size from that point.
+export function newZone({ x0, y0, x1 = x0, y1 = y0 }, bounds) {
+  const isClick = Math.abs(x1 - x0) < GRID && Math.abs(y1 - y0) < GRID
+  const w = Math.min(bounds.w, Math.max(160, isClick ? CARD_W * 2 + GRID * 3 : snap(Math.abs(x1 - x0))))
+  const h = Math.min(bounds.h, Math.max(120, isClick ? CARD_H * 2 + GRID * 2 : snap(Math.abs(y1 - y0))))
   return {
     id: crypto.randomUUID(),
     name: "New zone",
-    x: ENTRY.x + ENTRY.cols * (CARD_W + GRID) + PAD + (n % 4) * GRID,
-    y: ENTRY.y + (n % 4) * GRID,
-    w: CARD_W * 2 + GRID * 3,
-    h: CARD_H * 3 + GRID * 2,
+    x: Math.min(snap(Math.min(x0, x1)), Math.max(0, Math.floor((bounds.w - w) / GRID) * GRID)),
+    y: Math.min(snap(Math.min(y0, y1)), Math.max(0, Math.floor((bounds.h - h) / GRID) * GRID)),
+    w,
+    h,
   }
 }
 
