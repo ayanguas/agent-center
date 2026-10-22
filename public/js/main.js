@@ -152,9 +152,16 @@ function App() {
   useEffect(() => {
     const onMessage = e => e.data?.open && openReader(e.data.open)
     navigator.serviceWorker?.addEventListener("message", onMessage)
-    // Opened from a notification while no window was open.
-    const id = new URLSearchParams(location.search).get("open")
-    if (id) (openReader(id), history.replaceState(null, "", "/"))
+    // Opened from a notification while no window was open (?open=<session>),
+    // or a link to a view or a dialog (?view=board, ?dialog=setup).
+    const params = new URLSearchParams(location.search)
+    const id = params.get("open")
+    const linkedView = params.get("view")
+    const linkedDialog = params.get("dialog")
+    if (["inbox", "board", "canvas"].includes(linkedView)) setViewRaw(linkedView)
+    if (["setup", "help", "new", "digest"].includes(linkedDialog)) setDialog(linkedDialog)
+    if (id) openReader(id)
+    if (id || linkedView || linkedDialog) history.replaceState(null, "", "/")
     return () => navigator.serviceWorker?.removeEventListener("message", onMessage)
   }, [])
 

@@ -7,6 +7,8 @@ controls to answer, steer and tidy them up without hunting through windows.
 It runs on your Mac only. It reads the files Claude Code already writes, talks to your
 sessions through a small Claude Code mod, and keeps its own state in a folder of its own.
 
+![The board: sessions in columns by state, with the questions and approvals they wait on](docs/images/board.png)
+
 ## What it does
 
 - **Three views of your sessions.** **Inbox** (`1`): a list grouped by state. **Board** (`2`):
@@ -40,6 +42,13 @@ sessions through a small Claude Code mod, and keeps its own state in a folder of
 - **Search** every conversation you ever had (`/` or `⌘K`).
 - **Tasks** (optional): a markdown task list per project that Claude keeps for you, shown on each
   session.
+
+| | |
+|---|---|
+| ![Inbox: sessions grouped by state](docs/images/inbox.png) | ![Canvas: cards in zones, with sticky notes](docs/images/canvas.png) |
+| **Inbox** — what needs you first | **Canvas** — your own layout, zones and notes |
+| ![A conversation open beside the board, with a question to answer](docs/images/conversation.png) | ![Setup: each step says what it changes](docs/images/setup.png) |
+| **Conversation** — read, reply and answer | **Setup** — each step runs only when you press it |
 
 ## Requirements
 
@@ -184,6 +193,10 @@ bun test             # end-to-end: starts a server on a free port with a tempora
 launchctl kickstart -k gui/$(id -u)/local.agent-center    # restart after editing the server
 tail -f ~/Library/Application\ Support/Agent\ Center/logs/server.log
 ```
+
+`bun run demo` starts a board with made-up sessions and repos in a temporary folder, on
+<http://localhost:7799> (`bun run demo -- --port N` for another port). It does not touch your
+sessions; the screenshots above come from it.
 
 The tests use `AGENT_CENTER_DATA` (another data folder) and `AGENT_CENTER_DRY_RUN` (no
 `claude://` link is opened); both work for a manual test server too.
