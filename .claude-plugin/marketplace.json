@@ -1,0 +1,5 @@
+{
+  "name": "agent-center",
+  "owner": { "name": "caaarlxs" },
+  "plugins": [{ "name": "agent-center-bridge", "source": "./bridge" }]
+}

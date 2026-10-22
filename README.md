@@ -1,0 +1,207 @@
+# Agent Center
+
+A local board for every Claude Code session running in the Claude desktop app on your Mac:
+which ones are asking you something, which finished, which are still working — and the
+controls to answer, steer and tidy them up without hunting through windows.
+
+It runs on your Mac only. It reads the files Claude Code already writes, talks to your
+sessions through a small Claude Code mod, and keeps its own state in a folder of its own.
+
+## What it does
+
+- **Three views of your sessions.** **Inbox** (`1`): a list grouped by state. **Board** (`2`):
+  the same sessions in columns — Asking you, To review, Working, Pending, Later, Done — with
+  drag and drop, and lanes per repo (`G`). **Canvas** (`3`): cards you place anywhere,
+  with named zones, sticky notes (also attached to cards, with checklists), zoom, multi-select
+  and a Done strip at the bottom.
+- **Read and reply from the board.** Open a card to read the conversation and reply as if you
+  typed it in Claude. Messages wait 5 s (and while a turn runs) so you can undo them. Attach
+  images, PDFs and any other file; dictate with Whisper on your Mac.
+- **Answer what sessions ask.** Questions with options (AskUserQuestion) and tool approvals
+  ("Allow Bash: …") can be answered on the card or in the conversation; the dialog in Claude
+  closes by itself. Reply buttons Claude offers at the end of a turn are one click.
+- **Sleeping sessions wake up.** Claude desktop stops idle sessions to save memory. Sending to
+  one wakes it in the background and delivers the message; the app you were using keeps the
+  focus.
+- **Stop, mode, model.** Stop a running turn (`S`), switch the permission mode and the model of
+  a session from the reply box.
+- **Changes and PRs.** Each session's diff against its base branch, with line comments sent
+  back as one message; its pull requests with checks, review state, unresolved comments and a
+  "Ready to merge?" checklist; merge from the panel (needs `gh`).
+- **Fork** a conversation from any of your messages into a new session, **run** the session's
+  project (`▶` on the card) and see its ports, **start new sessions** in any folder with a first
+  prompt, files, mode, model and effort.
+- **Catch me up** (`D`): one line per session about what happened since you last looked and what
+  is yours to do, written by Claude in a separate call that does not touch your sessions.
+- **Plan limits** in the sidebar: how much of your 5-hour and weekly windows is used, when each
+  resets, and whether you are ahead of the time gone by.
+- **Context and cost** per session, background work running now, the task list of the current
+  turn, unread marks, urgency colours, macOS notifications and a Dock badge when a session asks.
+- **Search** every conversation you ever had (`/` or `⌘K`).
+- **Tasks** (optional): a markdown task list per project that Claude keeps for you, shown on each
+  session.
+
+## Requirements
+
+- macOS and the [Claude desktop app](https://claude.ai/download), with its Code tab used at least
+  once: the app then ships the Claude Code CLI the board uses (a `claude` on your PATH works too).
+- [Bun](https://bun.sh) (the installer offers to install it).
+- Python 3.8+ (`xcode-select --install` provides it): the session hook is a Python script.
+- Optional: [Homebrew](https://brew.sh) for dictation; the [GitHub CLI](https://cli.github.com)
+  (`gh`, signed in) for pull requests.
+
+## Install
+
+```bash
+git clone https://github.com/caaarlxs/agent-center.git
+cd agent-center
+./install.sh
+```
+
+The installer starts the server as a launchd agent (`local.agent-center`, it starts with your
+Mac and restarts if it stops) and opens <http://localhost:7777>. Install it as an app from
+Chrome's address bar if you like (a PWA: its own window, notifications, Dock badge).
+
+The **Setup** dialog opens by itself the first time (later: the gear in the sidebar). Each step
+says what it changes and runs only when you press it:
+
+| Step | What it does | |
+|---|---|---|
+| Claude desktop | Checks that the app is installed. | required |
+| Session tracking | Copies `hooks/session-inbox.py` to `~/.claude/hooks` and adds it to `~/.claude/settings.json` (backed up first to `settings.json.before-agent-center`). | required |
+| Bridge mod | Installs the `agent-center-bridge` Claude Code mod from this folder. It delivers your messages, answers questions and approvals, stops turns and reports your plan limits. Sessions load it when they start. | required |
+| Read sent files | Lets Claude read, without asking, the files you send from the board (`~/.claude/agent-center/uploads` only). | recommended |
+| Dictation on this Mac | `brew install whisper-cpp ffmpeg` and downloads the Whisper model (~550 MB). Your voice never leaves the Mac. Pick the language or let Whisper detect it; you can change it later. Without it the microphone uses the browser's dictation where there is one. | optional |
+| Tasks | Installs `organizer.py` in `~/organizer`, adds a short note to `~/.claude/CLAUDE.md` (shown before) asking Claude to keep your task list, and lets Claude run `organizer.py` without asking. Tasks live in a `TASKS.md` at the root of each project you register, plus `~/organizer/inbox.md`. Without it there is no Tasks tab. | optional |
+| GitHub PRs | Checks that `gh` is installed and signed in, and tells you the command when it is not. | optional |
+| Notifications | macOS notifications when a session asks while you are in another window. | optional |
+
+Sessions that were already open load the mod the next time they start.
+
+### Update
+
+```bash
+git pull && ./install.sh
+```
+
+Then open Setup: a newer bridge mod shows as "Update".
+
+### Uninstall
+
+```bash
+./uninstall.sh
+```
+
+It stops the server, removes the hook entries, the rule for sent files and the bridge mod, and
+asks before deleting the board's data and the files you sent. The tasks (`~/organizer`), their
+note in `CLAUDE.md` and their permission rule stay; delete them yourself if you want.
+
+## How it works
+
+```
+Claude desktop ──runs──▶ Claude Code sessions ──hook──▶ ~/.claude/session-inbox/<id>.json
+                              ▲    │                                │
+                bridge mod ───┘    └──transcripts──▶ ~/.claude/projects/**.jsonl
+                     │                                              │
+     ~/.claude/agent-center (outbox, answers, heartbeat…)           │
+                     │                                              ▼
+                     └────────────────▶  server (Bun, localhost) ◀── reads
+                                              │
+                                     the board in your browser
+```
+
+- **The hook** (`hooks/session-inbox.py`) records, per session, whether it works, asks or
+  finished, what it asks, and the recap of its last turn.
+- **The bridge mod** (`bridge/`) runs inside every session. It reads the messages the board
+  leaves in `~/.claude/agent-center/outbox/<session>/` and submits them as your prompt when the
+  session is free; it writes a heartbeat (`alive/`), acknowledges deliveries (`acks/`), holds
+  questions and approvals for the board (`questions/`, `permissions/`) and takes the board's
+  answers (`answers/`, `permits/`), stops turns (`control/`) and applies mode and model changes
+  (`settings/`). Each file has a single writer.
+- **The server** (`server.ts`, `routes/`, `lib/`) combines the hook records, the desktop app's own
+  session records (titles, archived, starred), the transcripts and the mod's files into one
+  snapshot, pushed to the page over server-sent events. Your own decisions (pins, columns,
+  canvas places, zones, notes, names) live in its `data/board.json`.
+- **The page** (`public/`) is plain ES modules with Preact and htm, no build step.
+
+Waking a sleeping session uses the desktop app's own link (`claude://code/continue`), retried
+every 20 s up to 4 times. If the app no longer trusts the session's folder, it refuses to start
+it; the board reads that from the app's log and tells you to open it in Claude.
+
+## Your data
+
+Everything stays on your Mac. The server listens on `127.0.0.1` only, refuses requests from other
+sites and other host names, and needs its own header for anything that changes state.
+
+| Where | What |
+|---|---|
+| `~/Library/Application Support/Agent Center/` | the board's state (`data/`), its log (`logs/`), the Whisper model (`models/`), your choices (`settings.json`) |
+| `~/.claude/session-inbox/` | one file per session, written by the hook |
+| `~/.claude/agent-center/` | messages, answers and heartbeats shared with the mod; the files you sent (`uploads/`) |
+
+Nothing deletes the files you send; the sidebar shows how much they take and opens the folder.
+Catch me up and new sessions run Claude Code itself (`claude -p`), with your account.
+
+## Configuration
+
+| Setting | Where | Default |
+|---|---|---|
+| Port | `AGENT_CENTER_PORT=7788 ./install.sh` (written into the launchd agent) | `7777` |
+| Dictation language | Setup → Dictation on this Mac (applies at once), or `AGENT_CENTER_VOICE_LANG` | `auto` |
+| Tasks on or off | Setup → Tasks | on when installed |
+| State folder | `AGENT_CENTER_HOME` | `~/Library/Application Support/Agent Center` |
+
+## Keyboard
+
+| Keys | Action |
+|---|---|
+| `J` `K` / `↓` `↑` | Move between sessions |
+| `↵` | Open the conversation |
+| `R` | Reply |
+| `T` | Rename (on the board only) |
+| `O` | Open in Claude |
+| `P` | Pin |
+| `A`, then `1`–`5` | Later (pick when); on a card already in Later, back |
+| `E` | Mark as done; on a done card, reopen |
+| `U` | Mark to review (a Pending card) |
+| `S` | Stop the running turn (a Working card) |
+| `Z` | Undo |
+| `/`, `⌘K` | Search |
+| `1` `2` `3` | Inbox · Board · Canvas |
+| `G` | Lanes per repo (Board) |
+| `N` | New session |
+| `D` | Catch me up |
+| `+` `−` `0`, `Space` + drag | Canvas: zoom in, out, fit; move the view |
+| `?` | All shortcuts |
+| `Esc` | Close |
+
+## Development
+
+```bash
+bun install          # TypeScript and Bun's types, for the checks only (the app has no dependencies)
+bun run check        # type-check, strict
+bun test             # end-to-end: starts a server on a free port with a temporary home
+launchctl kickstart -k gui/$(id -u)/local.agent-center    # restart after editing the server
+tail -f ~/Library/Application\ Support/Agent\ Center/logs/server.log
+```
+
+The tests use `AGENT_CENTER_DATA` (another data folder) and `AGENT_CENTER_DRY_RUN` (no
+`claude://` link is opened); both work for a manual test server too.
+
+The page reloads its files on every load (no cache): edit `public/` and reload. The bridge mod
+is checked with `claude plugin validate bridge`; after changing it, bump its version in
+`bridge/.claude-plugin/plugin.json` and press Update in Setup.
+
+## Limits
+
+- macOS and the Claude desktop app only. The board reads the app's session records and log and
+  uses its `claude://` links; none of these are a documented interface and a new version of the
+  app may change them.
+- The mod uses Claude Code's plugin hooks API, which is in early access.
+- Waking a session switches the session the Claude window shows.
+- The plan limits come from sessions running the mod; with none open they get older (shown dimmed).
+
+## License
+
+MIT — see [LICENSE](LICENSE). The libraries in `public/vendor/` keep their own licences
+([NOTICE](public/vendor/NOTICE.md)).

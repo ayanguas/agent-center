@@ -1,0 +1,9 @@
+# Local state: never part of the repository
+*.pyc
+*.tmp
+.DS_Store
+__pycache__/
+data/
+logs/
+models/
+node_modules/
