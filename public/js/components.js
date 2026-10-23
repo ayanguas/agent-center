@@ -275,6 +275,14 @@ export function Actions({ card, compact = false }) {
   </div>`
 }
 
+// Unread: "New", or what it waits for when that is new (a question, an approval).
+export function NewBadge({ card }) {
+  if (!card.isUnread) return null
+  const waits = card.column === "asking" ? (card.state === "permission" ? "permission" : "ask") : ""
+  const text = { ask: "Asks you", permission: "Approval" }[waits] ?? "New"
+  return html`<span class=${`new-badge ${waits}`} title=${waits ? "New since you last looked: it waits for you" : "Updated since you last looked at it"}>${text}</span>`
+}
+
 // ---------- work left running in the background ----------
 
 const BG_LABEL = { shell: "in the background", subagent: "subagent", monitor: "monitor", workflow: "workflow", current: "in progress" }

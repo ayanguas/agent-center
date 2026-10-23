@@ -3,7 +3,7 @@
 // the search results. A click, or Enter on a focused card or row, opens the
 // conversation.
 import { html, useContext, useState } from "../vendor/preact-htm.js"
-import { Actions, Context, Meta, RepoIcon, RepoTag, StateIcon, ageText, onOpenKey, urgencyOf } from "./components.js"
+import { Actions, Context, Meta, NewBadge, RepoIcon, RepoTag, StateIcon, ageText, onOpenKey, urgencyOf } from "./components.js"
 import { Ctx } from "./ctx.js"
 import { Icon } from "./icons.js"
 import { COLUMNS, STATES, ago, hue, keep, load, plain } from "./util.js"
@@ -35,7 +35,7 @@ function Card({ card, inStack = false }) {
             ${ageText(card, ui.now)}</span>
         </div>
       </div>
-      ${card.isUnread && html`<span class="new-badge" title="Updated since you last looked at it">New</span>`}
+      <${NewBadge} card=${card} />
       ${card.pinned && html`<span class="pin" title="Pinned: it shows first in its column"><${Icon} name="star" size=${13} /></span>`}
     </header>
     <${Context} card=${card} />
@@ -173,7 +173,7 @@ function Row({ card }) {
     <div class="row-main">
       <div class="row-line">
         <${StateIcon} card=${card} size=${24} />
-        ${card.isUnread && html`<span class="new-badge" title="Updated since you last looked at it">New</span>`}
+        <${NewBadge} card=${card} />
         <span class="row-title">${card.title}</span>
         <${RepoTag} name=${card.repo} />
         ${card.pinned && html`<span class="pin" title="Pinned"><${Icon} name="star" size=${11} /></span>`}

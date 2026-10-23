@@ -367,13 +367,9 @@ button.tag:hover, .pr:hover { background: var(--press); color: var(--text); }
 .row {
   position: relative;
   display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto; align-items: center; gap: 14px;
-  min-height: 44px; padding: 8px 10px 8px 14px; margin: 1px 0;
+  min-height: 44px; padding: 8px 10px; margin: 1px 0;
   border-radius: 9px; cursor: pointer;
   transition: background-color 80ms ease;
-}
-.row::before {
-  content: ""; position: absolute; left: 4px; top: 10px; bottom: 10px; width: 3px; border-radius: 2px;
-  background: hsl(var(--hue) 62% 55%); opacity: 0.85;
 }
 .row.selected { background: var(--select); }
 .row.reading { background: var(--select); box-shadow: inset 0 0 0 1px var(--accent-soft); }
@@ -421,7 +417,6 @@ button.tag:hover, .pr:hover { background: var(--press); color: var(--text); }
   cursor: pointer; box-shadow: 0 1px 1px rgb(0 0 0 / 0.02);
   transition: border-color 100ms ease, box-shadow 100ms ease;
 }
-.card::before { content: ""; position: absolute; left: -1px; top: 10px; bottom: 10px; width: 3px; border-radius: 0 2px 2px 0; background: hsl(var(--hue) 62% 55%); }
 .card header { display: flex; align-items: flex-start; gap: 10px; min-width: 0; }
 .card-head { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .card-sub { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 12px; }
@@ -637,16 +632,12 @@ mark { background: var(--ask-soft); color: var(--text); border-radius: 3px; padd
 @keyframes blink { 50% { opacity: 0.25; } }
 
 /* waiting for the person: yellow under 10 min, orange to 30, red after */
-.card.urgent-low::before, .row.urgent-low::before { background: #eab308; }
-.card.urgent-mid::before, .row.urgent-mid::before { background: #f97316; }
-.card.urgent-high::before, .row.urgent-high::before { background: var(--bad); }
 .card.urgent-low { border-color: rgb(234 179 8 / 0.45); }
 .card.urgent-mid { border-color: rgb(249 115 22 / 0.55); }
 .card.urgent-high { border-color: color-mix(in srgb, var(--bad) 60%, transparent); background: color-mix(in srgb, var(--bad) 6%, var(--surface)); }
 .urgent-low .age { color: #ca8a04; }
 .urgent-mid .age { color: #ea580c; font-weight: 600; }
 .urgent-high .age { color: var(--bad); font-weight: 650; }
-.card.urgent-high::before, .row.urgent-high::before { width: 4px; }
 
 /* consecutive cards of one repo in a column */
 .stack {
@@ -655,7 +646,6 @@ mark { background: var(--ask-soft); color: var(--text); border-radius: 3px; padd
 }
 .stack-head { display: flex; align-items: center; gap: 7px; padding: 1px 4px 2px; font-size: 12px; font-weight: 650; color: hsl(var(--hue) 55% var(--repo-l)); }
 .stack-head .count { margin-left: auto; color: var(--faint); font-weight: 500; }
-.stack .card::before { display: none; }
 .stack .card header:has(.age:only-child) { min-height: 0; }
 
 /* ============ swimlanes by repository ============ */
@@ -736,7 +726,6 @@ mark { background: var(--ask-soft); color: var(--text); border-radius: 3px; padd
   display: flex; flex-direction: column; gap: 8px;
   transition: left 340ms var(--ease-out), top 340ms var(--ease-out), border-color 120ms ease, box-shadow 120ms ease, opacity 200ms ease;
 }
-.ccard::before { content: ""; position: absolute; left: -1px; top: 10px; bottom: 10px; width: 3px; border-radius: 0 2px 2px 0; background: hsl(var(--hue) 62% 55%); }
 /* an archived card is falling (main.js holdForDrop): the rest wait, place and stacking alike */
 [data-settling] .ccard {
   transition: left 340ms var(--ease-out) 260ms, top 340ms var(--ease-out) 260ms, z-index 0s linear 260ms,
@@ -787,9 +776,6 @@ mark { background: var(--ask-soft); color: var(--text); border-radius: 3px; padd
 .ccard.state-permission { border-color: color-mix(in srgb, var(--bad) 55%, var(--line)); }
 .ccard.urgent-mid { --amp: 2; animation-duration: 5s; }
 .ccard.urgent-high { --amp: 2.6; animation-duration: 3.6s; }
-.ccard.urgent-low::before { background: #eab308; }
-.ccard.urgent-mid::before { background: #f97316; }
-.ccard.urgent-high::before { background: var(--bad); }
 @media (hover: hover) { .ccard:hover { animation-play-state: paused; } }
 /* a short shake, then stillness for the rest of the cycle */
 @keyframes nudge {
@@ -844,6 +830,9 @@ mark { background: var(--ask-soft); color: var(--text); border-radius: 3px; padd
   background: var(--review); color: var(--surface); font-size: 10px; font-weight: 750; letter-spacing: 0.05em; text-transform: uppercase;
 }
 .row .new-badge { align-self: center; }
+/* what is new is a question for you, or an approval it waits for */
+.new-badge.ask { background: var(--ask); }
+.new-badge.permission { background: var(--bad); }
 .card.unread:not(.selected, .reading, [class*="urgent-"]), .ccard.unread:not(.selected, .reading, .picked, [class*="urgent-"]) {
   border-color: color-mix(in srgb, var(--review) 75%, transparent);
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--review) 30%, transparent), 0 0 16px color-mix(in srgb, var(--review) 20%, transparent);

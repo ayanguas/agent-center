@@ -4,7 +4,7 @@
 // press ✓) to mark it done, lift it back up to reopen it. By default the
 // canvas fits the window, drawn smaller when it must; zoomed in, it scrolls.
 import { html, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "../vendor/preact-htm.js"
-import { Actions, BackgroundChip, Context, MEMORY_WARN, MemoryChip, PendingChip, PrChip, StateIcon, UsageMeter, ageText, onOpenKey, stateOf, urgencyOf } from "./components.js"
+import { Actions, BackgroundChip, Context, MEMORY_WARN, MemoryChip, NewBadge, PendingChip, PrChip, StateIcon, UsageMeter, ageText, onOpenKey, stateOf, urgencyOf } from "./components.js"
 import { CARD_H, CARD_W, ENTRY, GRID, dragHandler, layout, newZone, onCanvas, snap } from "./canvas-layout.js"
 import { Note, follow, keyOf, newNote } from "./canvas-notes.js"
 import { Ctx } from "./ctx.js"
@@ -119,7 +119,7 @@ function CanvasCard({ card, at, scale, onDropped, z, isPicked = false, onPick, g
         <span class="ctitle">${card.title}</span>
         <span class="csub"><span class="crepo">${card.repo}</span> · ${ageText(card, ui.now)}</span>
       </div>
-      ${card.isUnread && html`<span class="new-badge" title="Updated since you last looked at it">New</span>`}
+      <${NewBadge} card=${card} />
       ${card.pinned && html`<span class="pin" title="Pinned"><${Icon} name="star" size=${12} /></span>`}
     </div>
     ${!isDone && html`<${Context} card=${card} lines=${2} />`}
