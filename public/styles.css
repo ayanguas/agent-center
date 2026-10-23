@@ -836,8 +836,18 @@ mark { background: var(--ask-soft); color: var(--text); border-radius: 3px; padd
 .reply-choices { justify-content: flex-end; }
 .row .choices { margin-top: 2px; }
 
-.new-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); margin-right: 7px; vertical-align: 2px; flex: none; }
-.row .new-dot { margin-right: 0; }
+/* unread (updated since you last looked): a "New" badge and, on cards, a
+   blue border that shows from afar. Blue as "To review"; the selected card
+   keeps its own orange ring, and one asking you its urgency colour. */
+.new-badge {
+  flex: none; align-self: flex-start; display: inline-flex; align-items: center; height: 17px; padding: 0 6px; border-radius: 5px;
+  background: var(--review); color: var(--surface); font-size: 10px; font-weight: 750; letter-spacing: 0.05em; text-transform: uppercase;
+}
+.row .new-badge { align-self: center; }
+.card.unread:not(.selected, .reading, [class*="urgent-"]), .ccard.unread:not(.selected, .reading, .picked, [class*="urgent-"]) {
+  border-color: color-mix(in srgb, var(--review) 75%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--review) 30%, transparent), 0 0 16px color-mix(in srgb, var(--review) 20%, transparent);
+}
 .card.unread h3, .row.unread .row-title { font-weight: 750; }
 .card:not(.unread) h3, .row:not(.unread) .row-title { font-weight: 550; }
 .nav .pill.new { background: var(--accent-soft); color: var(--accent); }

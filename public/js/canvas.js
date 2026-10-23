@@ -116,9 +116,10 @@ function CanvasCard({ card, at, scale, onDropped, z, isPicked = false, onPick, g
     <div class="ccard-top">
       <${StateIcon} card=${card} size=${30} />
       <div class="ccard-head">
-        <span class="ctitle">${card.isUnread && html`<i class="new-dot"></i>`}${card.title}</span>
+        <span class="ctitle">${card.title}</span>
         <span class="csub"><span class="crepo">${card.repo}</span> · ${ageText(card, ui.now)}</span>
       </div>
+      ${card.isUnread && html`<span class="new-badge" title="Updated since you last looked at it">New</span>`}
       ${card.pinned && html`<span class="pin" title="Pinned"><${Icon} name="star" size=${12} /></span>`}
     </div>
     ${!isDone && html`<${Context} card=${card} lines=${2} />`}

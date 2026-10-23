@@ -27,7 +27,7 @@ function Card({ card, inStack = false }) {
     <header>
       <${StateIcon} card=${card} size=${30} />
       <div class="card-head">
-        <h3>${card.isUnread && html`<i class="new-dot" title="Updated since you last looked at it"></i>`}${card.title}</h3>
+        <h3>${card.title}</h3>
         <div class="card-sub">
           ${!inStack && html`<${RepoTag} name=${card.repo} />`}
           ${card.branch && html`<span class="branch" title=${card.branch}>${card.branch}</span>`}
@@ -35,6 +35,7 @@ function Card({ card, inStack = false }) {
             ${ageText(card, ui.now)}</span>
         </div>
       </div>
+      ${card.isUnread && html`<span class="new-badge" title="Updated since you last looked at it">New</span>`}
       ${card.pinned && html`<span class="pin" title="Pinned: it shows first in its column"><${Icon} name="star" size=${13} /></span>`}
     </header>
     <${Context} card=${card} />
@@ -172,7 +173,7 @@ function Row({ card }) {
     <div class="row-main">
       <div class="row-line">
         <${StateIcon} card=${card} size=${24} />
-        ${card.isUnread && html`<i class="new-dot" title="Updated since you last looked at it"></i>`}
+        ${card.isUnread && html`<span class="new-badge" title="Updated since you last looked at it">New</span>`}
         <span class="row-title">${card.title}</span>
         <${RepoTag} name=${card.repo} />
         ${card.pinned && html`<span class="pin" title="Pinned"><${Icon} name="star" size=${11} /></span>`}
