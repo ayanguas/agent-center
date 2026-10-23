@@ -290,7 +290,7 @@ export function BackgroundChip({ card }) {
   const title = list.map(t => `• ${bgTitle(t)} (${BG_LABEL[t.type] ?? t.type}, ${ago(t.since, ui.now)})`).join("\n")
   const label = list.every(t => t.type === "current") ? (list.length === 1 ? "1 long command" : `${list.length} long commands`) : `${list.length} running`
   return html`<span class="tag tone-work bg-chip" title=${`Running now:\n${title}`}>
-    <span class="dot pulse"></span>${label}</span>`
+    <span class="dot run"></span>${label}</span>`
 }
 
 // In the conversation: the same list, like the client's "Background tasks".
@@ -299,7 +299,7 @@ export function BackgroundBox({ card }) {
   const list = card?.background ?? []
   if (!list.length) return null
   return html`<div class="bg-box">
-    <div class="bg-head"><span class="dot pulse tone-work"></span>Running now<span class="count">${list.length}</span></div>
+    <div class="bg-head"><span class="dot run"></span>Running now<span class="count">${list.length}</span></div>
     ${list.map(t => html`<div key=${t.id} class="bg-row" title=${t.command ?? t.description ?? ""}>
       <${Icon} name=${t.type === "subagent" ? "bot" : "terminal"} size=${13} />
       <span class=${`bg-what ${t.type === "shell" && !t.description ? "mono" : ""}`}>${bgTitle(t)}</span>

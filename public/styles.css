@@ -21,6 +21,8 @@
   --bad-soft: rgb(220 38 38 / 0.1);
   --work: #15803d;
   --work-soft: rgb(22 163 74 / 0.12);
+  --run: #ea580c; /* a command running in the background */
+  --run-soft: rgb(234 88 12 / 0.13);
   --review: #2563eb;
   --review-soft: rgb(37 99 235 / 0.1);
   --select: rgb(194 90 50 / 0.08);
@@ -58,6 +60,8 @@
     --bad-soft: rgb(248 113 113 / 0.13);
     --work: #4ade80;
     --work-soft: rgb(74 222 128 / 0.12);
+    --run: #fb923c;
+    --run-soft: rgb(251 146 60 / 0.15);
     --review: #84a9ff;
     --review-soft: rgb(132 169 255 / 0.13);
     --select: rgb(232 130 90 / 0.1);
@@ -1304,7 +1308,14 @@ a.file-chip:hover { border-color: var(--line-strong); }
 }
 
 /* work left running in the background */
-.bg-chip { font-variant-numeric: tabular-nums; }
+.bg-chip { font-variant-numeric: tabular-nums; color: var(--run); background: var(--run-soft); }
+/* what runs in the background: an orange dot with a ring that beats */
+.dot.run { width: 8px; height: 8px; color: var(--run); animation: run-beat 1.4s ease-out infinite; }
+@keyframes run-beat {
+  0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--run) 60%, transparent); }
+  70%, 100% { box-shadow: 0 0 0 6px transparent; }
+}
+@media (prefers-reduced-motion: reduce) { .dot.run { animation: none; box-shadow: 0 0 0 2px var(--run-soft); } }
 .bg-box { flex: none; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--side); display: flex; flex-direction: column; gap: 4px; }
 .bg-head { display: flex; align-items: center; gap: 8px; font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
 .bg-head .count { color: var(--faint); font-weight: 500; }
