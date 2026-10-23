@@ -163,4 +163,14 @@ describe("messages to the session", () => {
   test("refuses an empty message", async () => {
     expect((await post(`/api/sessions/${ID}/send`, { text: "   " })).status).toBe(400)
   })
+
+  test("saves a large file sent with the message, and refuses an empty one", async () => {
+    const upload = (body: Uint8Array) =>
+      fetch(`${base()}/api/sessions/${ID}/upload`, { method: "POST", headers: { "content-type": "application/pdf", "x-file-name": "report.pdf", "x-agent-center": "1" }, body })
+    const saved = await jsonOf(upload(new Uint8Array(40 * 1024 * 1024).fill(7)))
+    expect(saved.ok).toBe(true)
+    expect(saved.path).toEndWith("-report.pdf")
+    expect(Bun.file(saved.path).size).toBe(40 * 1024 * 1024)
+    expect((await upload(new Uint8Array(0))).status).toBe(400)
+  })
 })

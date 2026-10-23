@@ -10,7 +10,7 @@ import { bytesText } from "./util.js"
 
 const IMAGE_TYPES = ["image/png", "image/jpeg", "image/gif", "image/webp"]
 const MAX_FILES = 10
-const MAX_BYTES = 30 * 1024 * 1024
+const MAX_BYTES = 500 * 1024 * 1024 // as lib/uploads.ts
 export const IMAGE_FILE = /\.(?:png|jpe?g|gif|webp)$/i
 
 // A saved file's path, as the message names it; and the line that names the
@@ -63,7 +63,7 @@ export function useAttachments(initial = [], { isKept = false } = {}) {
 
   const add = added => {
     const ok = [...added].filter(f => f.size > 0 && f.size <= MAX_BYTES)
-    if (ok.length < added.length) ui.toast("Each file can be up to 30 MB (and cannot be empty)")
+    if (ok.length < added.length) ui.toast("Each file can be up to 500 MB (and cannot be empty)")
     setFiles(list => {
       const next = [...list, ...ok.map(file => ({ key: crypto.randomUUID(), file, url: IMAGE_TYPES.includes(file.type) ? URL.createObjectURL(file) : null }))]
       if (next.length > MAX_FILES) ui.toast(`Up to ${MAX_FILES} files per message`)

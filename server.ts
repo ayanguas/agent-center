@@ -23,6 +23,7 @@ import { HOSTS, ORIGINS, PORT, PUBLIC_DIR, SESSIONS_DIR } from "./lib/config"
 import { json } from "./lib/http"
 import { refreshSoon, startLive } from "./lib/live"
 import { stopAll as stopRuns } from "./lib/runner"
+import { MAX_UPLOAD_BYTES } from "./lib/uploads"
 import { startWaking } from "./lib/wake"
 import { handleRead } from "./routes/read"
 import { handleSession } from "./routes/session"
@@ -80,6 +81,7 @@ Bun.serve({
   port: PORT,
   hostname: "127.0.0.1",
   idleTimeout: 0, // the SSE stream stays open
+  maxRequestBodySize: MAX_UPLOAD_BYTES + 1024 * 1024, // a file sent from the board
   fetch: route,
   error(err) {
     console.error(err)

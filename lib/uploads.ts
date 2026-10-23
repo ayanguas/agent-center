@@ -8,12 +8,12 @@
 //
 // Files saved before 22/10 have no name: <time>-<random>.<ext>.
 
-import { mkdir, readdir, stat } from "node:fs/promises"
+import { mkdir, readdir, stat, unlink } from "node:fs/promises"
 import { join } from "node:path"
 import { CENTER_DIR } from "./config"
 
 const UPLOADS = join(CENTER_DIR, "uploads")
-const MAX_BYTES = 30 * 1024 * 1024
+export const MAX_UPLOAD_BYTES = 500 * 1024 * 1024 // the file goes to disk as it arrives
 const EXT: Record<string, string> = { "image/png": "png", "image/jpeg": "jpg", "image/gif": "gif", "image/webp": "webp" }
 const FILE_RE = /^[\w-]+\/[\w.-]+$/
 
@@ -32,16 +32,33 @@ function safeName(name: string) {
   return { stem, ext }
 }
 
-export async function saveFile(sessionId: string, name: string, type: string, bytes: ArrayBuffer) {
+export async function saveFile(sessionId: string, name: string, type: string, body: ReadableStream | null, length: number) {
   if (!/^[\w-]+$/.test(sessionId)) throw new Error("invalid session")
-  if (bytes.byteLength === 0) throw new Error("the file is empty")
-  if (bytes.byteLength > MAX_BYTES) throw new Error("the file is larger than 30 MB")
+  if (!body || length === 0) throw new Error("the file is empty")
+  if (length > MAX_UPLOAD_BYTES) throw new Error("the file is larger than 500 MB")
   const { stem, ext: fromName } = safeName(name)
   const ext = fromName || EXT[type] || "bin"
   const dir = join(UPLOADS, sessionId)
   await mkdir(dir, { recursive: true })
   const path = join(dir, `${Date.now()}-${crypto.randomUUID().slice(0, 6)}${stem ? `-${stem}` : ""}.${ext}`)
-  await Bun.write(path, bytes)
+  // Written as it arrives; a body sent without its length is counted on the way.
+  const out = Bun.file(path).writer()
+  let written = 0
+  try {
+    const reader = body.getReader()
+    for (let part = await reader.read(); !part.done; part = await reader.read()) {
+      const chunk = part.value
+      written += chunk.byteLength
+      if (written > MAX_UPLOAD_BYTES) throw new Error("the file is larger than 500 MB")
+      out.write(chunk)
+    }
+    if (written === 0) throw new Error("the file is empty")
+  } catch (err) {
+    await out.end()
+    await unlink(path).catch(() => {})
+    throw err
+  }
+  await out.end()
   size.at = 0
   return path
 }

@@ -84,7 +84,8 @@ export async function handleUpload(req: Request, path: string): Promise<Response
   if (upload) {
     try {
       const name = decodeURIComponent(req.headers.get("x-file-name") ?? "")
-      return json({ ok: true, path: await saveFile(upload[1]!, name, req.headers.get("content-type") ?? "", await req.arrayBuffer()) })
+      const length = Number(req.headers.get("content-length") ?? NaN)
+      return json({ ok: true, path: await saveFile(upload[1]!, name, req.headers.get("content-type") ?? "", req.body, Number.isNaN(length) ? -1 : length) })
     } catch (err) {
       return json({ error: errorMessage(err) }, 400)
     }
