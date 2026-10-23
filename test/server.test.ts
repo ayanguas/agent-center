@@ -10,6 +10,7 @@ import { join } from "node:path"
 
 const ID = "11111111-2222-3333-4444-555555555555"
 const WATCHER = "66666666-7777-8888-9999-000000000000"
+const STALE = "99999999-8888-7777-6666-555555555555" // a CLI id an old copy of the desktop record still names
 let home = ""
 let data = ""
 let port = 0
@@ -45,6 +46,13 @@ beforeAll(async () => {
     { type: "assistant", uuid: "a1", timestamp: new Date(now - 1000).toISOString(), message: { role: "assistant", content: [{ type: "text", text: "Done: the zebra report is ready." }] } },
   ]
   await writeFile(join(home, ".claude", "projects", "demo", `${ID}.jsonl`), rows.map(r => JSON.stringify(r)).join("\n") + "\n")
+  // The desktop app keeps a copy of the session's record per account folder:
+  // the old one (read last) still names a CLI session that is gone.
+  const desktop = join(home, "Library", "Application Support", "Claude", "claude-code-sessions")
+  for (const [folder, cliSessionId, at] of [["a-account/org", ID, now], ["b-account/org", STALE, now - 90 * 86_400_000]] as const) {
+    await mkdir(join(desktop, folder), { recursive: true })
+    await writeFile(join(desktop, folder, "local_demo.json"), JSON.stringify({ sessionId: "local_demo", cliSessionId, cwd: home, title: "Demo session", lastActivityAt: at }))
+  }
 
   port = 20000 + Math.floor(Math.random() * 20000)
   server = Bun.spawn(["bun", "server.ts"], {
@@ -96,6 +104,12 @@ describe("board", () => {
     expect(card.title).toBe("Demo session")
     expect(card.column).toBe("asking")
     expect(card.ask).toBe("Shall I go on with the plan?")
+  })
+
+  test("follows the newest copy of the desktop app's record", async () => {
+    const state = await jsonOf(fetch(`${base()}/api/state`))
+    expect(state.cards.some((c: any) => c.id === ID)).toBe(true)
+    expect(state.cards.some((c: any) => c.id === STALE)).toBe(false)
   })
 
   test("a monitor left watching is not work in progress", async () => {

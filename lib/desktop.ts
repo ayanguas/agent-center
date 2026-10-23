@@ -41,6 +41,11 @@ export async function readDesktop(): Promise<DesktopIndex> {
   const accounts = await dirs(ROOT)
   if (accounts.length === 0) return { ok: false, byCli, byHost }
 
+  // The app keeps a copy of a session per account and organization folder it
+  // was seen in; an old copy can still name a CLI session that is long gone.
+  // The copy with the newest activity wins, and every CLI id any copy names
+  // leads to it.
+  const copies: { session: DesktopSession; mtimeMs: number }[] = []
   const seen = new Set<string>()
   for (const org of (await Promise.all(accounts.map(dirs))).flat()) {
     const archived = new Set<string>()
@@ -78,14 +83,22 @@ export async function readDesktop(): Promise<DesktopIndex> {
         } catch {
           cache.set(path, { mtimeMs: -1, session: null })
         }
-        const session = cache.get(path)?.session
-        if (!session) return
-        const entry = archived.has(session.hostId) ? { ...session, isArchived: true } : session
-        byHost.set(entry.hostId, entry)
-        if (entry.cliId) byCli.set(entry.cliId, entry)
+        const cached = cache.get(path)
+        if (!cached?.session) return
+        const session = archived.has(cached.session.hostId) ? { ...cached.session, isArchived: true } : cached.session
+        copies.push({ session, mtimeMs: cached.mtimeMs })
       }),
     )
   }
+  const newest = new Map<string, { session: DesktopSession; mtimeMs: number }>()
+  const byActivity = (a: (typeof copies)[number], b: (typeof copies)[number]) =>
+    (a.session.lastActivityAt ?? 0) - (b.session.lastActivityAt ?? 0) || a.mtimeMs - b.mtimeMs
+  for (const c of copies) {
+    const best = newest.get(c.session.hostId)
+    if (!best || byActivity(c, best) > 0) newest.set(c.session.hostId, c)
+  }
+  for (const { session } of newest.values()) byHost.set(session.hostId, session)
+  for (const { session } of copies) if (session.cliId) byCli.set(session.cliId, byHost.get(session.hostId)!)
   for (const path of [...cache.keys()]) if (!seen.has(path)) cache.delete(path)
   return { ok: true, byCli, byHost }
 }
