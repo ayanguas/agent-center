@@ -44,8 +44,54 @@ export const plain = s =>
 
 export function md(text) {
   const html = window.marked ? window.marked.parse(String(text ?? ""), { breaks: true }) : ""
-  return window.DOMPurify ? window.DOMPurify.sanitize(html, { ADD_ATTR: ["target"] }) : ""
+  const clean = window.DOMPurify ? window.DOMPurify.sanitize(html, { ADD_ATTR: ["target"] }) : ""
+  return clean.includes("<pre") ? withCopyButtons(clean) : clean
 }
+
+// Each code block gets a copy button (added after the sanitizing: it is ours).
+const COPY_ICON = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"/></svg>`
+function withCopyButtons(html) {
+  const t = document.createElement("template")
+  t.innerHTML = html
+  for (const pre of t.content.querySelectorAll("pre")) {
+    const box = document.createElement("div")
+    box.className = "code-box"
+    pre.replaceWith(box)
+    box.innerHTML = `<button type="button" class="code-copy" title="Copy">${COPY_ICON}<span>Copy</span></button>`
+    box.append(pre)
+  }
+  return t.innerHTML
+}
+
+// The clipboard API, else the older copy command (some windows refuse the API).
+async function copyText(text) {
+  try {
+    return await navigator.clipboard.writeText(text)
+  } catch {
+    const area = Object.assign(document.createElement("textarea"), { value: text })
+    area.style.cssText = "position:fixed;opacity:0;pointer-events:none"
+    document.body.append(area)
+    area.select()
+    const ok = document.execCommand("copy")
+    area.remove()
+    if (!ok) throw new Error("copy refused")
+  }
+}
+
+// One listener for every copy button, wherever the markdown is shown.
+document.addEventListener("click", async e => {
+  const button = e.target.closest?.(".code-copy")
+  if (!button) return
+  const text = button.parentElement.querySelector("pre")?.innerText ?? ""
+  try {
+    await copyText(text.replace(/\n$/, ""))
+    button.classList.add("done")
+    button.querySelector("span").textContent = "Copied"
+    setTimeout(() => (button.classList.remove("done"), (button.querySelector("span").textContent = "Copy")), 1500)
+  } catch {
+    button.querySelector("span").textContent = "Could not copy"
+  }
+})
 
 export function hue(name) {
   let h = 0
