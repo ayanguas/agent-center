@@ -10,6 +10,8 @@ import { join } from "node:path"
 
 const ID = "11111111-2222-3333-4444-555555555555"
 const WATCHER = "66666666-7777-8888-9999-000000000000"
+const SERVER = "12121212-3434-5656-7878-909090909090" // a turn that left a dev server running
+const HELPER = "23232323-4545-6767-8989-010101010101" // a turn that left a subagent working
 const STALE = "99999999-8888-7777-6666-555555555555" // a CLI id an old copy of the desktop record still names
 let home = ""
 let data = ""
@@ -40,12 +42,29 @@ beforeAll(async () => {
       background: [{ id: "m1", type: "monitor", description: "live updates for an artifact", command: null, since: now }],
     }),
   )
+  for (const [sid, type, title] of [[SERVER, "shell", "Dev server"], [HELPER, "subagent", "Helper"]] as const)
+    await writeFile(
+      join(home, ".claude", "session-inbox", `${sid}.json`),
+      JSON.stringify({
+        session_id: sid, cwd: home, project: "demo", state: "working", title, updated_at: now, background_at: now,
+        background: [{ id: "b1", type, description: "pnpm dev", command: "pnpm dev", since: now }],
+      }),
+    )
   await mkdir(join(home, ".claude", "projects", "demo"), { recursive: true })
   const rows = [
     { type: "user", uuid: "u1", timestamp: new Date(now - 2000).toISOString(), message: { role: "user", content: "Write the zebra report" } },
     { type: "assistant", uuid: "a1", timestamp: new Date(now - 1000).toISOString(), message: { role: "assistant", content: [{ type: "text", text: "Done: the zebra report is ready." }] } },
   ]
   await writeFile(join(home, ".claude", "projects", "demo", `${ID}.jsonl`), rows.map(r => JSON.stringify(r)).join("\n") + "\n")
+  // The helper's subagent, launched once; a newer client also copies the call
+  // into a row of its own (api-request-blob), which must not launch it again.
+  const launch = { type: "tool_use", id: "toolu_h1", name: "Agent", input: { description: "pnpm dev", run_in_background: true } }
+  const helperRows = [
+    { type: "assistant", uuid: "h1", timestamp: new Date(now - 5000).toISOString(), message: { role: "assistant", content: [launch] } },
+    { type: "user", uuid: "h2", timestamp: new Date(now - 4000).toISOString(), message: { role: "user", content: [{ type: "tool_result", tool_use_id: "toolu_h1", content: "Async agent launched. agentId: b1" }] } },
+    { type: "api-request-blob", sessionId: HELPER, message: { role: "assistant", content: [launch] } },
+  ]
+  await writeFile(join(home, ".claude", "projects", "demo", `${HELPER}.jsonl`), helperRows.map(r => JSON.stringify(r)).join("\n") + "\n")
   // The desktop app keeps a copy of the session's record per account folder:
   // the old one (read last) still names a CLI session that is gone.
   const desktop = join(home, "Library", "Application Support", "Claude", "claude-code-sessions")
@@ -118,6 +137,16 @@ describe("board", () => {
     expect(card.state).toBe("done")
     expect(card.column).not.toBe("working")
     expect(card.background).toEqual([])
+  })
+
+  test("a command left running is not work in progress; a subagent is", async () => {
+    const state = await jsonOf(fetch(`${base()}/api/state`))
+    const server = state.cards.find((c: any) => c.id === SERVER)
+    expect(server.state).toBe("done")
+    expect(server.column).not.toBe("working")
+    const helper = state.cards.find((c: any) => c.id === HELPER)
+    expect(helper.column).toBe("working")
+    expect(helper.background.map((t: any) => t.id)).toEqual(["b1"])
   })
 
   test("reads the conversation", async () => {

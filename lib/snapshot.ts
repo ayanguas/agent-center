@@ -149,14 +149,20 @@ async function cardOf(
   const lastActivity = Math.max(lead.updated_at, app?.lastActivityAt ?? 0, ...mtimes.map(m => m ?? 0))
   // A tool approval answered in the client leaves no hook trace until the
   // turn ends; the transcript moving on after the ask means it was answered.
-  // A turn that ended with only monitors left (watches, not work: an older
-  // hook counted them) is done.
-  const work = (lead.background ?? []).filter(t => t.type !== "monitor")
+  // A turn that ended with only monitors or shell commands left is done:
+  // a monitor only watches, and a command (a dev server, a watcher) may run
+  // for hours; the card shows it as running, not the session as working. A
+  // subagent left running is work: it reports back and the turn goes on.
+  // Only when the turn's end is the hook's last word and the mod sees no
+  // turn running: a new prompt keeps the list of the turn before.
+  const hasTurnEnded = (lead.background_at ?? lead.updated_at) >= lead.updated_at - 1000 && bridge.busy !== true
+  const shells = (lead.background ?? []).filter(t => t.type === "shell")
+  const work = (lead.background ?? []).filter(t => t.type !== "monitor" && t.type !== "shell")
   const s: Session =
     lead.state === "permission" && lastActivity > lead.updated_at + 2000
       ? { ...lead, state: "working", ask: null, ask_kind: null }
-      : lead.state === "working" && lead.background?.length && !work.length
-        ? { ...lead, state: "done", background: [] }
+      : lead.state === "working" && lead.background?.length && !work.length && hasTurnEnded
+        ? { ...lead, state: "done", background: shells }
         : lead
   // The mod (v2) says outright whether a turn runs: idle while the hook
   // still says working means the turn was stopped (Esc, or "Stop" here).
@@ -194,7 +200,7 @@ async function cardOf(
     mode: s.mode ?? null,
     effort: s.effort ?? null,
     // Only while the session lives: a closed process took its background work with it.
-    background: column === "working" || column === "asking" ? await liveBackground(id, s) : [],
+    background: column === "working" || column === "asking" || (bridge.isOpen && s.background?.length) ? await liveBackground(id, s) : [],
     choices: column === "asking" ? (s.choices ?? []) : [],
     askKind: column === "asking" ? (question ? "dialog" : permission ? "permission" : (s.ask_kind ?? null)) : null,
     // New: Claude finished something since the person last looked.

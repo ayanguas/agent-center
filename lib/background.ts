@@ -50,7 +50,10 @@ function ingest(scan: Scan, chunk: string) {
     } catch {
       continue
     }
-    if (row.isSidechain) continue
+    // Only the conversation's own rows: newer clients also write copies of
+    // earlier messages (api-request-blob, with no time of their own), which
+    // would start every command they hold again.
+    if (row.isSidechain || (row.type !== "user" && row.type !== "assistant")) continue
     const content = row.message?.content
     const at = Date.parse(row.timestamp ?? "") || Date.now()
     // A prompt (not a tool result) starts a new turn: the last one's calls are over.
