@@ -6,7 +6,7 @@ import { Ctx, Kbd } from "./ctx.js"
 import { Icon } from "./icons.js"
 import { ago, bytesText, hue, post } from "./util.js"
 
-export function Sidebar({ data, repoFilter, view, connected, notify }) {
+export function Sidebar({ data, repoFilter, view, connected, notify, sound }) {
   const ui = useContext(Ctx)
   const open = data.cards.filter(c => c.column !== "done")
   const asking = open.filter(c => c.column === "asking").length
@@ -57,8 +57,11 @@ export function Sidebar({ data, repoFilter, view, connected, notify }) {
     <div class="side-foot">
       <span class=${`live ${connected ? "on" : ""}`}><i></i>${connected ? "Live" : "Reconnecting…"}</span>
       <button class=${`ghost-btn ${notify === "on" ? "on" : ""}`} onClick=${() => ui.toggleNotify()}
-        title=${notify === "on" ? "Notifications on: you get one when a session asks you something. Click to turn them off" : notify === "blocked" ? "Chrome blocks notifications for this app" : "Notify me when a session asks me something"}>
+        title=${notify === "on" ? "Notifications on: a macOS notification when a session asks you something while you are in another window. Click to turn them off" : notify === "blocked" ? "Chrome blocks notifications for this app" : "Notify me (macOS) when a session asks me something while I am in another window"}>
         <${Icon} name=${notify === "on" ? "bell" : "bellOff"} size=${15} /></button>
+      <button class=${`ghost-btn ${sound === "on" ? "on" : ""}`} onClick=${() => ui.toggleSound()}
+        title=${sound === "on" ? "Sound on: a chime when a session finishes or asks you something, also while you look at the board. Click to turn it off" : "Play a chime when a session finishes or asks me something, also while I look at the board"}>
+        <${Icon} name=${sound === "on" ? "volume" : "volumeOff"} size=${15} /></button>
       <button class="ghost-btn" onClick=${() => ui.openDialog("setup")} title="Setup: hook, mod, dictation, tasks…">
         <${Icon} name="gear" size=${15} /></button>
       <button class="ghost-btn" onClick=${() => ui.openDialog("help")} title="Keyboard shortcuts (?)">

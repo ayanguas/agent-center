@@ -38,7 +38,8 @@ sessions through a small Claude Code mod, and keeps its own state in a folder of
 - **Plan limits** in the sidebar: how much of your 5-hour and weekly windows is used, when each
   resets, and whether you are ahead of the time gone by.
 - **Context and cost** per session, background work running now, the task list of the current
-  turn, unread marks, urgency colours, macOS notifications and a Dock badge when a session asks.
+  turn, unread marks, urgency colours, macOS notifications and a Dock badge when a session asks, and
+  an optional chime when a session finishes or asks (heard while you look at the board too).
 - **Search** every conversation you ever had (`/` or `⌘K`).
 - **Tasks** (optional): a markdown task list per project that Claude keeps for you, shown on each
   session.
@@ -84,6 +85,7 @@ says what it changes and runs only when you press it:
 | Tasks | Installs `organizer.py` in `~/organizer`, adds a short note to `~/.claude/CLAUDE.md` (shown before) asking Claude to keep your task list, and lets Claude run `organizer.py` without asking. Tasks live in a `TASKS.md` at the root of each project you register, plus `~/organizer/inbox.md`. Without it there is no Tasks tab. | optional |
 | GitHub PRs | Checks that `gh` is installed and signed in, and tells you the command when it is not. | optional |
 | Notifications | macOS notifications when a session asks while you are in another window. | optional |
+| Sound | A short chime when a session finishes its turn or asks you something, also while you look at the board. The speaker in the sidebar turns it on and off. | optional |
 
 Sessions that were already open load the mod the next time they start.
 

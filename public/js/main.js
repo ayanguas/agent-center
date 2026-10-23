@@ -12,6 +12,7 @@ import { useFlip } from "./motion.js"
 import { Reader } from "./reader.js"
 import { RunDialog } from "./run.js"
 import { Sidebar } from "./sidebar.js"
+import { chime } from "./sound.js"
 import { Toasts } from "./toasts.js"
 import { COLUMNS, PARK_OPTIONS, clock, get, isTyping, keep, load, post } from "./util.js"
 
@@ -45,6 +46,8 @@ function App() {
   // Notifications: "on", "off", or "blocked" (Chrome denied them).
   const permission = () => ("Notification" in window ? Notification.permission : "denied")
   const [notify, setNotifyRaw] = useState(() => (permission() === "denied" ? "blocked" : load("notify", "off")))
+  // A chime when a session ends its turn or asks you something: "on" or "off".
+  const [sound, setSoundRaw] = useState(() => load("sound", "off"))
   // First run, or a required step missing (the hook, the bridge mod): the
   // setup opens by itself, until closed once.
   useEffect(() => {
@@ -122,12 +125,21 @@ function App() {
   // starts asking while you look elsewhere raises a macOS notification; a
   // click on it opens that conversation (sw.js forwards the click here).
   const asked = useRef(null)
+  const working = useRef(null)
   useEffect(() => {
     if (!data) return
     const asking = data.cards.filter(c => c.column === "asking")
     if (navigator.setAppBadge) (asking.length ? navigator.setAppBadge(asking.length) : navigator.clearAppBadge()).catch(() => {})
     const before = asked.current
     asked.current = new Set(asking.map(c => c.id))
+    // The chime plays wherever you look, the board included: one per update,
+    // the higher one when a session starts asking, else when a turn ends.
+    const wasWorking = working.current
+    working.current = new Set(data.cards.filter(c => c.column === "working").map(c => c.id))
+    if (sound === "on" && before && wasWorking) {
+      if (asking.some(c => !before.has(c.id))) chime("ask")
+      else if ([...wasWorking].some(id => !working.current.has(id) && data.cards.some(c => c.id === id && c.column !== "archived"))) chime("done")
+    }
     if (!before || notify !== "on" || permission() !== "granted" || document.hasFocus()) return
     for (const c of asking) {
       if (before.has(c.id)) continue
@@ -170,6 +182,14 @@ function App() {
   const stopSession = async card => {
     const res = await post(`/api/sessions/${card.id}/stop`)
     toast(res.body.ok ? `Stopping “${card.title}”…` : (res.body.error ?? "Could not stop"))
+  }
+
+  const toggleSound = () => {
+    const next = sound === "on" ? "off" : "on"
+    setSoundRaw(next)
+    keep("sound", next)
+    if (next === "on") chime("done") // what you will hear
+    toast(next === "on" ? "Sound on: a chime when a session finishes or asks you something" : "Sound off")
   }
 
   const toggleNotify = async () => {
@@ -565,6 +585,7 @@ function App() {
     toggleWide: () => setWide(w => !w),
     stopSession,
     toggleNotify,
+    toggleSound,
     registerComposer: fn => (composerFocus.current = fn),
   }
   const readerCard = shown && data?.cards.find(c => c.id === shown.id)
@@ -574,7 +595,7 @@ function App() {
   return html`<${Ctx.Provider} value=${ui}>
     <div class=${`app ${reader ? "with-reader" : ""} ${view === "canvas" && !query ? "on-canvas" : ""} ${isSideOpen ? "side-open" : ""} ${dragging ? "is-dragging" : ""}`}
       style=${`--reader-w:${readerWidth}px`}>
-      ${data ? html`<${Sidebar} data=${data} repoFilter=${repoFilter} view=${view} connected=${connected} notify=${notify} />`
+      ${data ? html`<${Sidebar} data=${data} repoFilter=${repoFilter} view=${view} connected=${connected} notify=${notify} sound=${sound} />`
         : html`<aside class="sidebar"><div class="brand"><span class="logo"><i></i><i></i><i></i></span>Agent Center</div></aside>`}
       <div class="scrim" onClick=${() => setSideOpen(false)}></div>
       <main class="main">
@@ -625,7 +646,7 @@ function App() {
       ${dialog === "new" && html`<${NewSession} initialRoot=${repoFilter} onClose=${() => setDialog(null)} />`}
       ${dialog === "help" && html`<${Help} onClose=${() => setDialog(null)} />`}
       ${dialog === "digest" && html`<${Digest} onClose=${() => setDialog(null)} />`}
-      ${dialog === "setup" && html`<${Setup} notify=${notify} onClose=${() => (keep("setupSeen", true), setDialog(null))} />`}
+      ${dialog === "setup" && html`<${Setup} notify=${notify} sound=${sound} onClose=${() => (keep("setupSeen", true), setDialog(null))} />`}
       ${runFor && html`<${RunDialog} card=${runFor} onClose=${() => setRunFor(null)} />`}
     </div>
   <//>`

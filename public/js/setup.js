@@ -63,7 +63,7 @@ function StepState({ step }) {
   return html`<span class="setup-state todo">Pending</span>`
 }
 
-export function Setup({ onClose, notify }) {
+export function Setup({ onClose, notify, sound }) {
   const ui = useContext(Ctx)
   const dialog = useRef()
   const [status, setStatus] = useState(null)
@@ -134,6 +134,12 @@ export function Setup({ onClose, notify }) {
           ${notify === "on" ? html`<span class="setup-state done"><${Icon} name="check" size=${13} />Done</span>` : html`<span class="setup-state todo">Pending</span>`}</div>
         <p class="setup-text">A system notification when a session asks you something and you are in another window.</p>
         <div class="setup-actions">${notify !== "on" && html`<button class="btn primary" onClick=${() => ui.toggleNotify()}>Turn on</button>`}</div>
+      </li>`}
+      ${status && html`<li class=${`setup-step ${sound === "on" ? "done" : "missing"}`}>
+        <div class="setup-head"><b>Sound</b><span class="setup-need need-optional">Optional</span>
+          ${sound === "on" ? html`<span class="setup-state done"><${Icon} name="check" size=${13} />On</span>` : html`<span class="setup-state todo">Off</span>`}</div>
+        <p class="setup-text">A short chime when a session finishes its turn or asks you something, also while you look at the board (notifications only reach you in another window). The speaker in the sidebar turns it on and off.</p>
+        <div class="setup-actions"><button class=${`btn ${sound === "on" ? "" : "primary"}`} onClick=${() => ui.toggleSound()}>${sound === "on" ? "Turn off" : "Turn on"}</button></div>
       </li>`}
     </ol>
     <div class="dialog-actions">
