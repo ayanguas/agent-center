@@ -193,6 +193,13 @@ describe("messages to the session", () => {
     expect((await post(`/api/sessions/${ID}/send`, { text: "   " })).status).toBe(400)
   })
 
+  test("takes a long paste, and refuses one too long for a message", async () => {
+    const sent = await jsonOf(post(`/api/sessions/${ID}/send`, { text: "x".repeat(100_000) }))
+    expect(sent.ok).toBe(true)
+    expect((await post(`/api/sessions/${ID}/unsend`, { messageId: sent.messageId })).status).toBe(200)
+    expect((await post(`/api/sessions/${ID}/send`, { text: "x".repeat(300_001) })).status).toBe(400)
+  })
+
   test("saves a large file sent with the message, and refuses an empty one", async () => {
     const upload = (body: Uint8Array) =>
       fetch(`${base()}/api/sessions/${ID}/upload`, { method: "POST", headers: { "content-type": "application/pdf", "x-file-name": "report.pdf", "x-agent-center": "1" }, body })

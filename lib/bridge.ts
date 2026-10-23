@@ -20,7 +20,7 @@ import { readJson, writeJsonAtomic } from "./files"
 
 const BASE = CENTER_DIR
 const ALIVE_MS = 10_000
-const MAX_TEXT = 20_000
+const MAX_TEXT = 300_000 // about 75k tokens: a long paste fits; a file is better beyond
 const UNDO_MS = 5000
 // A message the session has not taken this long after it could have (sent and
 // past its undo time, with the session already gone quiet): the server's
@@ -67,7 +67,7 @@ export async function send(sessionId: string, text: string) {
   if (!isId(sessionId)) throw new Error("invalid session")
   const body = text.trim()
   if (!body) throw new Error("the message is empty")
-  if (body.length > MAX_TEXT) throw new Error(`the message is longer than ${MAX_TEXT} characters`)
+  if (body.length > MAX_TEXT) throw new Error(`the message is longer than ${MAX_TEXT.toLocaleString("en-GB")} characters: send it as a file`)
   const id = `${Date.now()}-${crypto.randomUUID().slice(0, 8)}`
   // The temp name does not end in .json: the mod never reads half a message.
   await writeJsonAtomic(join(BASE, "outbox", sessionId, `${id}.json`), { id, text: body, at: Date.now(), notBefore: Date.now() + UNDO_MS })
