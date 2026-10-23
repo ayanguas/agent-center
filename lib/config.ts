@@ -28,7 +28,8 @@ export const DESKTOP_LOG = join(HOME, "Library", "Logs", "Claude", "main.log")
 
 // The person's choices, made in the setup dialog (lib/setup.ts writes them).
 // voiceLanguage: what Whisper listens for ("auto", "en", "es"…).
-export type Settings = { voiceLanguage?: string; organizer?: boolean }
+// runCommands: "▶" on the shell blocks of a conversation (lib/commands.ts).
+export type Settings = { voiceLanguage?: string; organizer?: boolean; runCommands?: boolean }
 function readSettings(): Settings {
   try {
     return JSON.parse(readFileSync(SETTINGS_PATH, "utf8"))

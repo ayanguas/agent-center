@@ -22,6 +22,7 @@ import { activate } from "./lib/client"
 import { HOSTS, ORIGINS, PORT, PUBLIC_DIR, SESSIONS_DIR } from "./lib/config"
 import { json } from "./lib/http"
 import { refreshSoon, startLive } from "./lib/live"
+import { stopAllCommands } from "./lib/commands"
 import { stopAll as stopRuns } from "./lib/runner"
 import { MAX_UPLOAD_BYTES } from "./lib/uploads"
 import { startWaking } from "./lib/wake"
@@ -89,8 +90,9 @@ Bun.serve({
   },
 })
 
-// Going down (launchd stop, Ctrl-C): the projects started with "Run" go too.
+// Going down (launchd stop, Ctrl-C): the projects started with "Run" and the
+// commands started with "▶" go too.
 for (const signal of ["SIGTERM", "SIGINT"] as const)
-  process.on(signal, () => void stopRuns().finally(() => process.exit(0)))
+  process.on(signal, () => void Promise.all([stopRuns(), stopAllCommands()]).finally(() => process.exit(0)))
 
 console.log(`agent-center on http://localhost:${PORT}`)

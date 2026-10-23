@@ -124,6 +124,9 @@ function App() {
   // The Dock icon counts the sessions that ask you something. A session that
   // starts asking while you look elsewhere raises a macOS notification; a
   // click on it opens that conversation (sw.js forwards the click here).
+  // "Run" on the shell blocks shows only while Setup allows it.
+  useEffect(() => void document.documentElement.classList.toggle("can-run", !!data?.canRunCommands), [data?.canRunCommands])
+
   const asked = useRef(null)
   const working = useRef(null)
   useEffect(() => {

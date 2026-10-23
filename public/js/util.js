@@ -48,7 +48,11 @@ export function md(text) {
   return clean.includes("<pre") ? withCopyButtons(clean) : clean
 }
 
-// Each code block gets a copy button (added after the sanitizing: it is ours).
+// Each code block gets a copy button, and a shell block a run button (shown
+// only when Setup allows it; conversation.js runs it). Added after the
+// sanitizing: they are ours.
+const SHELL = /\blanguage-(bash|sh|shell|zsh)\b/
+const RUN_ICON = `<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 4.5v15l12.5-7.5z"/></svg>`
 const COPY_ICON = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"/></svg>`
 function withCopyButtons(html) {
   const t = document.createElement("template")
@@ -57,7 +61,10 @@ function withCopyButtons(html) {
     const box = document.createElement("div")
     box.className = "code-box"
     pre.replaceWith(box)
-    box.innerHTML = `<button type="button" class="code-copy" title="Copy">${COPY_ICON}<span>Copy</span></button>`
+    const run = SHELL.test(pre.querySelector("code")?.className ?? "")
+      ? `<button type="button" class="code-run" title="Run in the session's folder">${RUN_ICON}<span>Run</span></button>`
+      : ""
+    box.innerHTML = `<div class="code-tools">${run}<button type="button" class="code-copy" title="Copy">${COPY_ICON}<span>Copy</span></button></div>`
     box.append(pre)
   }
   return t.innerHTML
@@ -82,7 +89,7 @@ async function copyText(text) {
 document.addEventListener("click", async e => {
   const button = e.target.closest?.(".code-copy")
   if (!button) return
-  const text = button.parentElement.querySelector("pre")?.innerText ?? ""
+  const text = button.closest(".code-box").querySelector("pre")?.innerText ?? ""
   try {
     await copyText(text.replace(/\n$/, ""))
     button.classList.add("done")

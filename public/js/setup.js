@@ -49,6 +49,12 @@ const STEPS = {
     text: "A markdown task list per project (~/organizer). Claude writes down what is still pending and the board shows it in each session. Installs organizer.py and adds the note below to ~/.claude/CLAUDE.md (it saves a backup first). Without this, the Tasks tab does not show.",
     action: "Install",
   },
+  commands: {
+    title: "Run commands",
+    need: "Optional",
+    text: "Adds Run to the shell blocks Claude writes in a conversation, as in Claude desktop: a click runs that command on this Mac, in the session's folder, with your shell (no terminal opens). The output shows under the block, with Stop. It runs exactly what the block says.",
+    action: "Turn on",
+  },
   github: {
     title: "GitHub PRs",
     need: "Optional",
@@ -124,8 +130,8 @@ export function Setup({ onClose, notify, sound }) {
           <div class="setup-actions">
             ${label && html`<button class="btn primary" disabled=${busy !== null || step.state === "working"}
               onClick=${() => run(step.id, step.id === "whisper" ? { voiceLanguage: language } : {})}>${busy === step.id ? "One moment…" : label}</button>`}
-            ${step.id === "organizer" && step.state === "done" && html`<button class="btn" disabled=${busy !== null}
-              onClick=${() => run("organizer", { off: true })}>Turn off</button>`}
+            ${(step.id === "organizer" || step.id === "commands") && step.state === "done" && html`<button class="btn" disabled=${busy !== null}
+              onClick=${() => run(step.id, { off: true })}>Turn off</button>`}
           </div>
         </li>`
       })}

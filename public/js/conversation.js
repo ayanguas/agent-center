@@ -14,6 +14,51 @@ import { clock, get, md, post } from "./util.js"
 
 const FOLLOW_MS = 2000
 
+// "Run" on a shell block (Setup → Run commands): the command runs on this Mac
+// in the session's folder (lib/commands.ts), no terminal opens; its output
+// shows under the block while it runs, with a button to stop it. The blocks
+// are markdown HTML (util.js md), so one listener on the conversation serves
+// them all.
+async function onCodeClick(e, sessionId) {
+  const run = e.target.closest?.(".code-run")
+  const stop = e.target.closest?.(".code-stop")
+  if (stop) {
+    stop.disabled = true
+    await post(`/api/sessions/${sessionId}/execstop`, { commandId: stop.closest(".code-out").dataset.command })
+    return
+  }
+  if (!run || run.disabled) return
+  const box = run.closest(".code-box")
+  const command = box.querySelector("pre")?.innerText.trim()
+  if (!command) return
+  box.querySelector(".code-out")?.remove()
+  const out = document.createElement("div")
+  out.className = "code-out"
+  out.innerHTML = `<div class="code-out-head"><span class="dot run"></span><span class="grow">Running in the session's folder…</span><button type="button" class="link-btn code-stop">Stop</button></div><pre class="code-log"></pre>`
+  box.append(out)
+  const head = out.querySelector(".code-out-head")
+  const log = out.querySelector(".code-log")
+  const end = (tone, text) => (head.innerHTML = `<span class="${tone}">●</span><span class="grow"></span>`, (head.querySelector(".grow").textContent = text), (run.disabled = false))
+  run.disabled = true
+  const started = await post(`/api/sessions/${sessionId}/exec`, { command })
+  if (!started.body.ok) return end("bad", started.body.error ?? "Could not run it")
+  out.dataset.command = started.body.command.id
+  while (out.isConnected) {
+    const { body } = await post(`/api/sessions/${sessionId}/execstatus`, { commandId: out.dataset.command })
+    const c = body.command
+    if (!c) return end("bad", body.error ?? "The command is gone")
+    const isAtEnd = log.scrollTop + log.clientHeight >= log.scrollHeight - 8
+    if (log.textContent !== c.output) log.textContent = c.output
+    if (isAtEnd) log.scrollTop = log.scrollHeight
+    if (!c.isRunning) {
+      const took = Math.max(1, Math.round((c.endedAt - c.startedAt) / 1000))
+      return c.wasStopped ? end("bad", `Stopped after ${took} s`) : end(c.exitCode === 0 ? "ok" : "bad", `${c.exitCode === 0 ? "Done" : `Ended with code ${c.exitCode}`} in ${took} s`)
+    }
+    await new Promise(r => setTimeout(r, 800))
+  }
+  run.disabled = false
+}
+
 // The task list moving on: same rules as the server's applyPlanOp.
 function applyPlanOp(steps, op) {
   const next = steps.map(s => ({ ...s }))
@@ -408,7 +453,7 @@ export function Conversation({ id, card, pending, onDelivered, onUnsend, stuck =
     if (stick.current) setHasNew(false)
   }
 
-  return html`<div class="conversation" ref=${box} onScroll=${onScroll}>
+  return html`<div class="conversation" ref=${box} onScroll=${onScroll} onClick=${e => onCodeClick(e, id)}>
     ${!page.loaded && html`<div class="skeleton-msgs"><i></i><i></i><i></i></div>`}
     ${page.error && html`<p class="muted center">${page.error}</p>`}
     ${page.hasMore && html`<button class="btn subtle earlier" onClick=${loadEarlier}>Load earlier messages</button>`}

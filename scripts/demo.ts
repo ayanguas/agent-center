@@ -158,7 +158,10 @@ const SESSIONS: Demo[] = [
     id: id(6), repo: "mobile-app", branch: "feat/dark-settings", title: "Dark mode for the settings screens", state: "done", minutesAgo: 95,
     summary: "Settings follow the system theme now; three custom colours moved to tokens.", context: 120_000,
     board: { pos: { x: 1176, y: 120 }, seen_at: now - 60 * min },
-    turns: [{ prompt: "Make the settings screens follow dark mode.", steps: [{ text: "Settings follow the system theme now; three custom colours moved to tokens." }] }],
+    turns: [{
+      prompt: "Make the settings screens follow dark mode.",
+      steps: [{ text: "Settings follow the system theme now; three custom colours moved to tokens.\n\nTo see the change:\n\n```bash\ngit log --oneline -3\n```" }],
+    }],
   },
   {
     id: id(7), repo: "payments-api", title: "Upgrade the Stripe SDK to v15", state: "done", minutesAgo: 180,
@@ -272,6 +275,8 @@ await write(join(claude, "plugins", "installed_plugins.json"), { version: 2, plu
 
 const items: Record<string, unknown> = {}
 for (const s of SESSIONS) if (s.board) items[s.id] = s.board
+// "Run" on shell blocks is on here (the demo's folders are made up).
+await write(join(state, "settings.json"), { runCommands: true })
 await write(join(state, "data", "board.json"), {
   seenEpoch: now - 24 * 60 * min,
   items,

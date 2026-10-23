@@ -203,3 +203,38 @@ describe("messages to the session", () => {
     expect((await upload(new Uint8Array(0))).status).toBe(400)
   })
 })
+
+describe("running a command from a shell block", () => {
+  const status = async (commandId: string) => (await jsonOf(post(`/api/sessions/${ID}/execstatus`, { commandId }))).command
+  const until = async (commandId: string) => {
+    for (let i = 0; i < 50; i++) {
+      const c = await status(commandId)
+      if (!c.isRunning) return c
+      await Bun.sleep(100)
+    }
+    throw new Error("the command did not end")
+  }
+
+  test("is refused until Setup turns it on", async () => {
+    expect((await post(`/api/sessions/${ID}/exec`, { command: "echo hi" })).status).toBe(403)
+    expect((await jsonOf(fetch(`${base()}/api/state`))).canRunCommands).toBe(false)
+  })
+
+  test("runs in the session's folder, shows the output, and stops", async () => {
+    expect((await post("/api/setup/commands")).status).toBe(200)
+    const started = await jsonOf(post(`/api/sessions/${ID}/exec`, { command: "echo from-the-board; pwd" }))
+    const done = await until(started.command.id)
+    expect(done.exitCode).toBe(0)
+    expect(done.output).toContain("from-the-board")
+    expect(done.output).toContain(home)
+
+    const long = await jsonOf(post(`/api/sessions/${ID}/exec`, { command: "sleep 30" }))
+    expect((await jsonOf(post(`/api/sessions/${ID}/execstop`, { commandId: long.command.id }))).ok).toBe(true)
+    expect((await until(long.command.id)).wasStopped).toBe(true)
+
+    // Another session cannot read it.
+    expect((await post(`/api/sessions/${WATCHER}/execstatus`, { commandId: started.command.id })).status).toBe(404)
+    expect((await post("/api/setup/commands", { options: { off: true } })).status).toBe(200)
+    expect((await post(`/api/sessions/${ID}/exec`, { command: "echo hi" })).status).toBe(403)
+  })
+})

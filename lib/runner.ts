@@ -133,14 +133,19 @@ export async function stop(id: string) {
   const state = runs.get(id)
   if (!state || state.exitCode !== null) return false
   state.wasStopped = true
-  const pids = await tree(state.pid)
+  await killTree(state.pid)
+  return true
+}
+
+// SIGTERM to a process and its children, youngest first; SIGKILL 4 s later.
+export async function killTree(root: number) {
+  const pids = await tree(root)
   for (const pid of pids.reverse()) {
     try {
       process.kill(pid, "SIGTERM")
     } catch {}
   }
   setTimeout(() => pids.forEach(pid => { try { process.kill(pid, "SIGKILL") } catch {} }), 4000)
-  return true
 }
 
 // The run as the board shows it, with fresh ports while it lives.

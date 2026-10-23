@@ -219,6 +219,7 @@ export async function setupStatus(): Promise<{ steps: Step[]; isReady: boolean; 
       ? { id: "whisper", state: whisperJob.error ? "missing" : "working", detail: whisperJob.error ?? whisperJob.phase, progress: whisperJob.progress }
       : { id: "whisper", state: whisperReady ? "done" : "missing" },
     { id: "organizer", state: (await isOrganizerOn()) ? "done" : "missing", detail: (await exists(ORGANIZER)) ? "found" : undefined },
+    { id: "commands", state: settings.runCommands === true ? "done" : "missing" },
     { id: "github", state: ghAuth ? "done" : which("gh") ? "missing" : "unavailable", detail: ghAuth ? undefined : which("gh") ? "signed-out" : "not-installed" },
   ]
   const isReady = steps.filter(x => ["hook", "bridge"].includes(x.id)).every(x => x.state === "done")
@@ -240,6 +241,8 @@ export async function runStep(id: string, options: Record<string, unknown> = {})
       return installWhisper()
     case "organizer":
       return options.off ? saveSettings({ organizer: false }) : installOrganizer()
+    case "commands":
+      return saveSettings({ runCommands: !options.off })
   }
   throw new Error(`unknown step: ${id}`)
 }

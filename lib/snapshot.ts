@@ -7,6 +7,7 @@ import { HOME } from "./config"
 import { backgroundOf } from "./background"
 import { board, itemOf, type BoardItem } from "./board"
 import { status as bridgeStatus, type Limits, type Permission } from "./bridge"
+import { canRunCommands } from "./commands"
 import { readDesktop, type DesktopIndex } from "./desktop"
 import { lookup as prLookup, type Pr } from "./github"
 import { running } from "./launch"
@@ -254,6 +255,7 @@ export async function snapshot() {
     notes: board.notes ?? [],
     limits: accountLimits(built.map(c => c.bridge.limits)),
     uploadsBytes: await folderSize(),
+    canRunCommands: canRunCommands(),
     features: { organizer },
   }
 }

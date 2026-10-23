@@ -11,6 +11,7 @@ import { forkPoint } from "../lib/fork"
 import { errorMessage, json } from "../lib/http"
 import { launch } from "../lib/launch"
 import { refreshSoon } from "../lib/live"
+import { commandStatus, runCommand, stopCommand } from "../lib/commands"
 import { saveCommand, start as startRun, status as runStatus, stop as stopRun } from "../lib/runner"
 import { groupOf } from "../lib/snapshot"
 import { wokeNow } from "../lib/wake"
@@ -83,6 +84,23 @@ export async function handleSession(id: string, action: string, body: Record<str
       await stopRun(id)
       setTimeout(refreshSoon, 1500)
       return json({ ok: true })
+    // "▶" on a shell block: the command runs in the session's folder.
+    case "exec": {
+      const group = groupOf(id)
+      const command = String(body.command ?? "").trim()
+      if (!group || !command) return json({ error: "missing command or session" }, 400)
+      try {
+        return json({ ok: true, command: runCommand(id, group.lead.cwd, command) })
+      } catch (err) {
+        return json({ error: errorMessage(err) }, 403)
+      }
+    }
+    case "execstatus": {
+      const command = commandStatus(id, String(body.commandId ?? ""))
+      return command ? json({ ok: true, command }) : json({ error: "unknown command" }, 404)
+    }
+    case "execstop":
+      return json({ ok: await stopCommand(id, String(body.commandId ?? "")) })
     // The answer to the question the session asks, given on the board.
     case "answer":
       try {

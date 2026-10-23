@@ -16,6 +16,9 @@ sessions through a small Claude Code mod, and keeps its own state in a folder of
   drag and drop, and lanes per repo (`G`). **Canvas** (`3`): cards you place anywhere,
   with named zones, sticky notes (also attached to cards, with checklists), zoom, multi-select
   and a Done strip at the bottom.
+- **Code blocks** in a conversation wrap their lines and have a Copy button; with **Run
+  commands** on (Setup), a shell block also has Run: it runs on your Mac in the session's
+  folder, with its output and a Stop button under the block, as in Claude desktop.
 - **Read and reply from the board.** Open a card to read the conversation and reply as if you
   typed it in Claude. Messages wait 5 s (and while a turn runs) so you can undo them. Attach
   images, PDFs and any other file; dictate with Whisper on your Mac.
@@ -83,6 +86,7 @@ says what it changes and runs only when you press it:
 | Read sent files | Lets Claude read, without asking, the files you send from the board (`~/.claude/agent-center/uploads` only). | recommended |
 | Dictation on this Mac | `brew install whisper-cpp ffmpeg` and downloads the Whisper model (~550 MB). Your voice never leaves the Mac. Pick the language or let Whisper detect it; you can change it later. Without it the microphone uses the browser's dictation where there is one. | optional |
 | Tasks | Installs `organizer.py` in `~/organizer`, adds a short note to `~/.claude/CLAUDE.md` (shown before) asking Claude to keep your task list, and lets Claude run `organizer.py` without asking. Tasks live in a `TASKS.md` at the root of each project you register, plus `~/organizer/inbox.md`. Without it there is no Tasks tab. | optional |
+| Run commands | Adds Run to the shell blocks of a conversation: a click runs that command on this Mac, in the session's folder, with your shell. Off until you turn it on; Turn off removes it. | optional |
 | GitHub PRs | Checks that `gh` is installed and signed in, and tells you the command when it is not. | optional |
 | Notifications | macOS notifications when a session asks while you are in another window. | optional |
 | Sound | A short chime when a session finishes its turn or asks you something, also while you look at the board. The speaker in the sidebar turns it on and off. | optional |
@@ -143,6 +147,8 @@ it; the board reads that from the app's log and tells you to open it in Claude.
 
 Everything stays on your Mac. The server listens on `127.0.0.1` only, refuses requests from other
 sites and other host names, and needs its own header for anything that changes state.
+With Run commands on, a click on Run runs that block's command on your Mac: it runs exactly what
+the block says, as Claude desktop's own Run does.
 
 | Where | What |
 |---|---|
