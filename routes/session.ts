@@ -12,8 +12,9 @@ import { errorMessage, json } from "../lib/http"
 import { launch } from "../lib/launch"
 import { refreshSoon } from "../lib/live"
 import { commandStatus, runCommand, stopCommand } from "../lib/commands"
+import { rescan, stopProcess } from "../lib/memory"
 import { saveCommand, start as startRun, status as runStatus, stop as stopRun } from "../lib/runner"
-import { groupOf } from "../lib/snapshot"
+import { groupOf, knownSessionIds } from "../lib/snapshot"
 import { wokeNow } from "../lib/wake"
 
 async function send(id: string, body: Record<string, unknown>) {
@@ -101,6 +102,14 @@ export async function handleSession(id: string, action: string, body: Record<str
     }
     case "execstop":
       return json({ ok: await stopCommand(id, String(body.commandId ?? "")) })
+    // Stop something the session started (a dev server left running), from
+    // its memory reading; never the session's own process.
+    case "stopprocess": {
+      const ok = await stopProcess(groupOf(id)?.ids ?? [id], Number(body.pid))
+      if (!ok) return json({ error: "That process is not one this session started" }, 404)
+      setTimeout(() => void rescan(knownSessionIds()).then(refreshSoon), 1500)
+      return json({ ok })
+    }
     // The answer to the question the session asks, given on the board.
     case "answer":
       try {

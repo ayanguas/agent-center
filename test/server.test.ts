@@ -238,3 +238,34 @@ describe("running a command from a shell block", () => {
     expect((await post(`/api/sessions/${ID}/exec`, { command: "echo hi" })).status).toBe(403)
   })
 })
+
+describe("memory", () => {
+  test("counts what a session left running, and stops only that", async () => {
+    // A command a session left behind, as `( … &)` leaves it: no parent but
+    // launchd, and the session id in its command line.
+    await Bun.spawn(["/bin/sh", "-c", `(sleep 120; echo ${ID}) > /dev/null 2>&1 &`]).exited
+    // An open page keeps the board reading (a snapshot a second, memory every 20 s).
+    const page = (await fetch(`${base()}/api/stream`)).body!.getReader()
+    void (async () => { while (!(await page.read().catch(() => ({ done: true }))).done); })()
+    let pid = 0
+    try {
+      let card: any = null
+      for (let i = 0; i < 60 && !card?.memory?.items.some((m: any) => m.isDetached); i++) {
+        await Bun.sleep(500)
+        card = (await jsonOf(fetch(`${base()}/api/state`))).cards.find((c: any) => c.id === ID)
+      }
+      const item = card.memory.items.find((m: any) => m.isDetached)
+      pid = item.pid
+      expect(item.label).toContain("sleep")
+      // Not another session's, not a process the session did not start.
+      expect((await post(`/api/sessions/${WATCHER}/stopprocess`, { pid })).status).toBe(404)
+      expect((await post(`/api/sessions/${ID}/stopprocess`, { pid: process.pid })).status).toBe(404)
+      expect((await jsonOf(post(`/api/sessions/${ID}/stopprocess`, { pid }))).ok).toBe(true)
+      await Bun.sleep(500)
+      expect(() => process.kill(pid, 0)).toThrow()
+    } finally {
+      await page.cancel()
+      if (pid) try { process.kill(pid, "SIGKILL") } catch {}
+    }
+  }, 40_000)
+})

@@ -200,6 +200,7 @@ export function Meta({ card }) {
     ${card.isLaunching && html`<span class="tag tone-work" title="The first turn runs headless; open it in Claude when it ends">headless</span>`}
     ${card.state === "permission" && card.column === "asking" && html`<span class="tag tone-bad">needs approval</span>`}
     <${BackgroundChip} card=${card} />
+    <${MemoryChip} card=${card} />
     <${RunChip} card=${card} />
     ${card.prs?.map(pr => html`<${PrChip} key=${pr.url} pr=${pr} repo=${card.repo} cardId=${card.id} />`)}
     ${card.taskCount > 0 &&
@@ -293,20 +294,73 @@ export function BackgroundChip({ card }) {
     <span class="dot run"></span>${label}</span>`
 }
 
-// In the conversation: the same list, like the client's "Background tasks".
+// In the conversation: the same list, like the client's "Background tasks",
+// with what each one takes in memory and Stop; then what else the session
+// started that still takes memory (a dev server it left running, maybe from
+// a turn long gone, an MCP server).
 export function BackgroundBox({ card }) {
   const ui = useContext(Ctx)
   const list = card?.background ?? []
-  if (!list.length) return null
+  const items = (card?.memory?.items ?? []).filter(i => i.kind !== "session")
+  // A task's process: the one whose command line holds the task's command.
+  const flat = text => String(text ?? "").replace(/['"]/g, "").replace(/\s+/g, " ").trim()
+  const used = new Set()
+  const processOf = t => {
+    const k = flat(t.command)
+    const found = k && items.find(i => !used.has(i.pid) && flat(i.command).includes(k))
+    if (found) used.add(found.pid)
+    return found
+  }
+  const rows = list.map(t => ({ task: t, proc: processOf(t) }))
+  const others = items.filter(i => !used.has(i.pid) && i.bytes >= 20 * MB)
+  if (!rows.length && !others.length) return null
+  const stopAt = async i => {
+    const res = await post(`/api/sessions/${card.id}/stopprocess`, { pid: i.pid })
+    ui.toast(res.body.ok ? `Stopping ${i.label}…` : (res.body.error ?? "Could not stop it"))
+  }
+  const memCell = i => i && html`<span class=${`bg-mem ${i.bytes >= MEMORY_WARN ? "warn" : ""}`}>${memText(i.bytes)}</span>
+    <button class="link-btn bg-stop" title=${`Stop it (and what it started)${i.cwd ? `: ${i.cwd}` : ""}`} onClick=${() => stopAt(i)}>Stop</button>`
   return html`<div class="bg-box">
-    <div class="bg-head"><span class="dot run"></span>Running now<span class="count">${list.length}</span></div>
-    ${list.map(t => html`<div key=${t.id} class="bg-row" title=${t.command ?? t.description ?? ""}>
+    <div class="bg-head"><span class="dot run"></span>Running now<span class="count">${rows.length + others.length}</span>
+      ${card.memory?.total >= MEMORY_WARN && html`<span class="bg-total" title="Memory this session and what it started take on this Mac">${memText(card.memory.total)} in memory</span>`}</div>
+    ${rows.map(({ task: t, proc }) => html`<div key=${t.id} class="bg-row" title=${[t.command ?? t.description ?? "", proc?.cwd].filter(Boolean).join("\n")}>
       <${Icon} name=${t.type === "subagent" ? "bot" : "terminal"} size=${13} />
       <span class=${`bg-what ${t.type === "shell" && !t.description ? "mono" : ""}`}>${bgTitle(t)}</span>
       <span class="bg-kind">${BG_LABEL[t.type] ?? t.type}</span>
       <span class="age">${ago(t.since, ui.now)}</span>
+      ${memCell(proc)}
+    </div>`)}
+    ${others.map(i => html`<div key=${i.pid} class="bg-row" title=${[i.command, i.cwd].filter(Boolean).join("\n")}>
+      <${Icon} name=${i.kind === "mcp" ? "tool" : "terminal"} size=${13} />
+      <span class="bg-what mono">${i.label}</span>
+      <span class="bg-kind">${[i.kind === "mcp" ? "MCP server" : i.cwd?.split("/").slice(-2).join("/"), i.isDetached && "left running"].filter(Boolean).join(" · ")}</span>
+      <span class="age">${ago(i.since, ui.now)}</span>
+      ${memCell(i)}
     </div>`)}
   </div>`
+}
+
+// ---------- memory ----------
+// What a session and everything it started take on this Mac (lib/memory.ts).
+
+const MB = 1024 ** 2
+const GB = 1024 ** 3
+export const MEMORY_WARN = 1 * GB // the card shows it from here, orange
+export const MEMORY_HIGH = 3 * GB // and red from here
+export const memText = b => (b >= GB ? `${(b / GB).toLocaleString("en-GB", { maximumFractionDigits: 1 })} GB` : `${Math.max(1, Math.round(b / MB))} MB`)
+
+// On a card, once it takes 1 GB: the total, and what takes it in the tooltip.
+export function MemoryChip({ card }) {
+  const ui = useContext(Ctx)
+  const m = card.memory
+  if (!m || m.total < MEMORY_WARN) return null
+  const lines = m.items
+    .filter(i => i.bytes >= 10 * MB)
+    .map(i => `• ${i.label}${i.cwd ? ` · ${i.cwd}` : ""} · ${memText(i.bytes)}${i.kind === "session" ? "" : ` · ${ago(i.since, ui.now)}`}${i.isDetached ? " · left running" : ""}`)
+  return html`<button class=${`tag mem-chip ${m.total >= MEMORY_HIGH ? "high" : ""}`}
+    title=${`Memory on this Mac: ${memText(m.total)}\n${lines.join("\n")}\n\nClick to see it and stop what you do not need`}
+    onClick=${e => (e.stopPropagation(), ui.openReader(card.id))}>
+    <${Icon} name="gauge" size=${12} />${memText(m.total)}</button>`
 }
 
 // Messages waiting for a session: amber while they wait, red once the

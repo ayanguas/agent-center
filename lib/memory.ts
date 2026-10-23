@@ -1,0 +1,175 @@
+// What each session costs in memory: its `claude` process and everything it
+// started (commands, dev servers, MCP servers), and what it started that
+// outlived its process: a command launched with `( … &)` leaves the tree, and
+// a session put to sleep leaves its commands running. Those are found by the
+// session id in their command line (Claude Code's scratchpad path carries it).
+// Memory is Activity Monitor's "Memory" column (compressed and swapped pages
+// count), read with `top`. The board asks for it with every snapshot (each
+// second while a page is open) and gets the last reading; a new one starts
+// in the background when that is 20 s old.
+
+import { HOME } from "./config"
+import { exec } from "./proc"
+import { killTree } from "./runner"
+
+const EVERY_MS = 20_000
+const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g
+const SHELLS = new Set(["zsh", "bash", "sh", "fish"])
+const WRAPPERS = new Set(["safe-chain", "env", "nohup", "caffeinate", "time", "exec"])
+
+export type MemoryItem = {
+  pid: number
+  kind: "session" | "command" | "mcp"
+  label: string
+  command: string // the first process's own command line, to match a background task
+  cwd: string | null
+  bytes: number
+  since: number
+  isDetached: boolean // left the session's process (the session may be asleep)
+}
+export type SessionMemory = { total: number; items: MemoryItem[] }
+export type Pressure = "normal" | "warning" | "critical"
+
+type Row = { pid: number; ppid: number; since: number; command: string }
+
+let latest: { at: number; bySession: Map<string, SessionMemory>; pressure: Pressure } = { at: 0, bySession: new Map(), pressure: "normal" }
+let running: Promise<void> | null = null
+
+// "1-02:03:04", "02:03:04", "03:04" → when it started.
+function sinceOf(etime: string, now: number) {
+  const [days, rest] = etime.includes("-") ? etime.split("-") : ["0", etime]
+  const parts = rest!.split(":").map(Number).reverse()
+  const secs = (parts[0] ?? 0) + (parts[1] ?? 0) * 60 + (parts[2] ?? 0) * 3600 + Number(days) * 86400
+  return now - secs * 1000
+}
+
+// top's "MEM": 1400M, 26K, 2.6G, 512B (a trailing + or - is a trend).
+function bytesOf(text: string) {
+  const m = text.match(/^([\d.]+)([BKMGT])/)
+  if (!m) return 0
+  return Number(m[1]) * { B: 1, K: 1024, M: 1024 ** 2, G: 1024 ** 3, T: 1024 ** 4 }[m[2] as "B"]
+}
+
+const base = (word: string) => word.split("/").pop() ?? word
+
+// A process as a person reads it: "pnpm dev", "python keepawake.py --interval 60".
+function readable(command: string) {
+  const words = command.split(/\s+/).filter(Boolean)
+  while (words.length > 1 && WRAPPERS.has(base(words[0]!))) words.shift()
+  const first = base(words[0] ?? "")
+  // node /…/node_modules/.bin/../next/dist/bin/next dev → next dev
+  if ((first === "node" || first === "bun") && words[1]?.includes("/")) {
+    const script = words[1].match(/node_modules\/(?:\.bin\/\.\.\/)?(@?[\w.-]+(?:\/[\w.-]+)?)/)?.[1]
+    return [script ? base(script) : base(words[1]), ...words.slice(2)].join(" ").slice(0, 80)
+  }
+  return [first, ...words.slice(1).map(w => (w.startsWith("/") && w.length > 30 ? base(w) : w))].join(" ").slice(0, 80)
+}
+
+async function scan(sessionIds: Set<string>) {
+  const now = Date.now()
+  const [ps, top, level] = await Promise.all([
+    exec(["/bin/ps", "-axww", "-o", "pid=,ppid=,etime=,command="], { timeoutMs: 5000 }),
+    exec(["/usr/bin/top", "-l", "1", "-stats", "pid,mem"], { timeoutMs: 8000 }),
+    exec(["/usr/sbin/sysctl", "-n", "kern.memorystatus_vm_pressure_level"], { timeoutMs: 2000 }),
+  ])
+  const rows = new Map<number, Row>()
+  for (const line of ps.stdout.split("\n")) {
+    const m = line.match(/^\s*(\d+)\s+(\d+)\s+(\S+)\s+(.*)$/)
+    if (m) rows.set(Number(m[1]), { pid: Number(m[1]), ppid: Number(m[2]), since: sinceOf(m[3]!, now), command: m[4]! })
+  }
+  const mem = new Map<number, number>()
+  for (const line of top.stdout.split("\n")) {
+    const m = line.match(/^\s*(\d+)\s+(\S+)\s*$/)
+    if (m) mem.set(Number(m[1]), bytesOf(m[2]!))
+  }
+  const kids = new Map<number, number[]>()
+  for (const r of rows.values()) kids.set(r.ppid, [...(kids.get(r.ppid) ?? []), r.pid])
+  const tree = (pid: number): number[] => [pid, ...(kids.get(pid) ?? []).flatMap(tree)]
+  const claimed = new Set<number>()
+
+  // A process and its children as one item, named after its first process
+  // that is not a shell (Claude Code wraps each command in `zsh -c`).
+  const item = (pid: number, kind: MemoryItem["kind"], isDetached: boolean): MemoryItem => {
+    const pids = tree(pid).filter(p => !claimed.has(p))
+    pids.forEach(p => claimed.add(p))
+    const named = pids.map(p => rows.get(p)!).find(r => r && !SHELLS.has(base(r.command.split(/\s+/)[0] ?? ""))) ?? rows.get(pid)!
+    const label = readable(named.command)
+    return {
+      pid, kind: kind === "command" && /\bmcp\b|mcp-server|modelcontextprotocol/i.test(named.command) ? "mcp" : kind,
+      label, command: rows.get(pid)!.command.slice(0, 3000), cwd: null, bytes: pids.reduce((sum, p) => sum + (mem.get(p) ?? 0), 0), since: rows.get(pid)!.since, isDetached,
+    }
+  }
+
+  const bySession = new Map<string, SessionMemory>()
+  const add = (id: string, it: MemoryItem) => {
+    const s = bySession.get(id) ?? { total: 0, items: [] }
+    s.items.push(it)
+    s.total += it.bytes
+    bySession.set(id, s)
+  }
+  // The session's own process, and what it started.
+  for (const r of rows.values()) {
+    if (base(r.command.split(" --")[0]!.trim()) !== "claude") continue
+    const id = r.command.match(/--(?:resume|session-id)[= ]([0-9a-f-]{36})/)?.[1]
+    if (!id) continue
+    claimed.add(r.pid)
+    add(id, { pid: r.pid, kind: "session", label: "Claude (the session)", command: "", cwd: null, bytes: mem.get(r.pid) ?? 0, since: r.since, isDetached: false })
+    for (const child of kids.get(r.pid) ?? []) add(id, item(child, "command", false))
+  }
+  // What outlived it: the topmost process naming a known session. The
+  // desktop app's wrapper around a session (its parent) names it too.
+  const sessionPids = new Set(claimed)
+  for (const r of rows.values()) {
+    if (claimed.has(r.pid) || (kids.get(r.pid) ?? []).some(k => sessionPids.has(k))) continue
+    const id = [...r.command.matchAll(UUID)].map(m => m[0]).find(u => sessionIds.has(u))
+    const parent = rows.get(r.ppid)
+    if (!id || (parent && !claimed.has(parent.pid) && parent.command.includes(id))) continue
+    add(id, item(r.pid, "command", true))
+  }
+
+  // Where each command runs (one lsof for all).
+  const items = [...bySession.values()].flatMap(s => s.items).filter(i => i.kind !== "session")
+  if (items.length) {
+    const out = await exec(["/usr/sbin/lsof", "-a", "-d", "cwd", "-Fn", "-p", items.map(i => i.pid).join(",")], { timeoutMs: 4000 })
+    const cwd = new Map<number, string>()
+    let pid = 0
+    for (const line of out.stdout.split("\n")) {
+      if (line.startsWith("p")) pid = Number(line.slice(1))
+      else if (line.startsWith("n")) cwd.set(pid, line.slice(1).replace(HOME, "~"))
+    }
+    for (const i of items) i.cwd = cwd.get(i.pid) ?? null
+  }
+  for (const s of bySession.values()) s.items.sort((a, b) => b.bytes - a.bytes)
+  const pressure: Pressure = level.stdout.trim() === "4" ? "critical" : level.stdout.trim() === "2" ? "warning" : "normal"
+  latest = { at: now, bySession, pressure }
+}
+
+// For a card: its sessions' memory together (a desktop session can run
+// several CLI sessions over time).
+export function memoryOf(ids: string[]): SessionMemory | null {
+  const parts = ids.map(id => latest.bySession.get(id)).filter((s): s is SessionMemory => !!s)
+  if (!parts.length) return null
+  const items = parts.flatMap(s => s.items).sort((a, b) => b.bytes - a.bytes)
+  return { total: items.reduce((sum, i) => sum + i.bytes, 0), items }
+}
+
+// The last reading; a new one starts in the background when it is old.
+export function memoryNow(sessionIds: Set<string>) {
+  if (Date.now() - latest.at > EVERY_MS && !running) running = scan(sessionIds).catch(() => {}).finally(() => (running = null))
+  return latest
+}
+
+// Read again now and wait for it (after a Stop).
+export async function rescan(sessionIds: Set<string>) {
+  await (running ?? Promise.resolve())
+  running = scan(sessionIds).catch(() => {}).finally(() => (running = null))
+  await running
+}
+
+// Stop one thing a session started, and only that: never the session itself.
+export async function stopProcess(sessionIds: string[], pid: number) {
+  const found = sessionIds.map(id => latest.bySession.get(id)).flatMap(s => s?.items ?? []).find(i => i.pid === pid)
+  if (!found || found.kind === "session") return false
+  await killTree(pid)
+  return true
+}

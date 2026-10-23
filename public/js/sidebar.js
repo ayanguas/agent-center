@@ -1,7 +1,9 @@
 // The left column: new session and "Catch me up", the three views, the repos
-// to filter by, the plan's rate limits, the folder of sent files, and the
-// live connection, notifications and keyboard help at the foot.
-import { html, useContext } from "../vendor/preact-htm.js"
+// to filter by, the plan's rate limits, what the sessions take in memory, the
+// folder of sent files, and the live connection, notifications and keyboard
+// help at the foot.
+import { html, useContext, useState } from "../vendor/preact-htm.js"
+import { MEMORY_WARN, memText } from "./components.js"
 import { Ctx, Kbd } from "./ctx.js"
 import { Icon } from "./icons.js"
 import { ago, bytesText, hue, post } from "./util.js"
@@ -51,6 +53,7 @@ export function Sidebar({ data, repoFilter, view, connected, notify, sound }) {
       )}
     </nav>
     <${Limits} limits=${data.limits} />
+    <${SessionsMemory} data=${data} />
     <button class=${`side-uploads ${uploadsTone}`} title="Open the sent files folder in Finder"
       onClick=${async () => !(await post("/api/uploads/open")).body.ok && ui.toast("Could not open the folder")}>
       <${Icon} name="paperclip" size=${14} /><span>Sent files</span><span class="n">${bytesText(data.uploadsBytes ?? 0)}</span></button>
@@ -69,6 +72,34 @@ export function Sidebar({ data, repoFilter, view, connected, notify, sound }) {
       </button>
     </div>
   </aside>`
+}
+
+// ---------- what the sessions take in memory ----------
+
+const PRESSURE = { warning: "Mac short of memory", critical: "Mac out of memory" }
+
+// The sessions together (their processes and what they started); open, the
+// ones that take the most, each a click from its conversation.
+function SessionsMemory({ data }) {
+  const ui = useContext(Ctx)
+  const [isOpen, setOpen] = useState(false)
+  const m = data.memory
+  if (!m?.total) return null
+  const heavy = data.cards.filter(c => c.memory?.total >= 100 * 1024 ** 2).sort((a, b) => b.memory.total - a.memory.total)
+  const tone = m.pressure !== "normal" || heavy.some(c => c.memory.total >= MEMORY_WARN) ? "tone-run" : ""
+  return html`<div class="side-memory">
+    <button class=${`side-uploads ${tone}`} aria-expanded=${isOpen} onClick=${() => setOpen(!isOpen)}
+      title="Memory your sessions and what they started take on this Mac (Activity Monitor's Memory column). Click to see which">
+      <${Icon} name="gauge" size=${14} /><span>Sessions</span>
+      ${PRESSURE[m.pressure] && html`<span class="mem-pressure">${PRESSURE[m.pressure]}</span>`}
+      <span class="n">${memText(m.total)}</span></button>
+    ${isOpen && html`<ul class="mem-list">
+      ${heavy.map(c => html`<li key=${c.id}><button class=${c.memory.total >= MEMORY_WARN ? "warn" : ""} onClick=${() => ui.openReader(c.id)}
+        title=${c.memory.items.filter(i => i.bytes >= 10 * 1024 ** 2).map(i => `• ${i.label}${i.cwd ? ` · ${i.cwd}` : ""} · ${memText(i.bytes)}`).join("\n")}>
+        <span class="t">${c.title}</span><span class="n">${memText(c.memory.total)}</span></button></li>`)}
+      ${!heavy.length && html`<li class="muted">No session takes 100 MB</li>`}
+    </ul>`}
+  </div>`
 }
 
 // ---------- the plan's limits ----------

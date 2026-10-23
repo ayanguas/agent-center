@@ -1316,6 +1316,16 @@ a.file-chip:hover { border-color: var(--line-strong); }
 @media (hover: hover) { .side-uploads:hover { background: var(--hover); color: var(--text); } }
 .side-uploads.tone-ask, .side-uploads.tone-ask .n { color: var(--ask); }
 .side-uploads.tone-bad, .side-uploads.tone-bad .n { color: var(--bad); }
+.side-uploads.tone-run, .side-uploads.tone-run .n { color: var(--run); }
+.side-memory { display: flex; flex-direction: column; }
+.mem-pressure { font-size: 10.5px; font-weight: 600; color: var(--bad); white-space: nowrap; }
+.mem-list { list-style: none; margin: 2px 2px 0; padding: 0; display: flex; flex-direction: column; max-height: 220px; overflow: auto; }
+.mem-list li.muted { padding: 4px 10px; font-size: 11.5px; }
+.mem-list button { display: flex; align-items: center; gap: 8px; width: 100%; height: 26px; padding: 0 10px 0 32px; border-radius: 7px; font-size: 12px; color: var(--muted); text-align: left; }
+.mem-list button.warn, .mem-list button.warn .n { color: var(--run); }
+@media (hover: hover) { .mem-list button:hover { background: var(--hover); color: var(--text); } }
+.mem-list .t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mem-list .n { flex: none; font-size: 11.5px; color: var(--faint); font-variant-numeric: tabular-nums; }
 
 /* a narrow board (the panel open beside it): the top bar keeps to one line */
 .topbar { min-width: 0; }
@@ -1349,7 +1359,14 @@ a.file-chip:hover { border-color: var(--line-strong); }
 .bg-row .icon { flex: none; color: var(--work); }
 .bg-what { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .bg-what.mono { font: 12px var(--mono); }
-.bg-kind { flex: none; font-size: 11px; color: var(--faint); }
+.bg-kind { flex: none; font-size: 11px; color: var(--faint); max-width: 40%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bg-mem { flex: none; font-size: 11.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.bg-mem.warn { color: var(--run); font-weight: 600; }
+.bg-stop { flex: none; font-size: 11.5px; }
+.bg-total { margin-left: auto; text-transform: none; letter-spacing: 0; font-weight: 600; color: var(--run); }
+/* a session that takes a lot of memory: orange from 1 GB, red from 3 GB */
+.mem-chip { color: var(--run); background: var(--run-soft); font-variant-numeric: tabular-nums; }
+.mem-chip.high { color: var(--bad); background: var(--bad-soft); }
 
 /* recording: the mic opens into a pill with a live wave */
 .mic-pill {

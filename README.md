@@ -40,6 +40,10 @@ sessions through a small Claude Code mod, and keeps its own state in a folder of
   is yours to do, written by Claude in a separate call that does not touch your sessions.
 - **Plan limits** in the sidebar: how much of your 5-hour and weekly windows is used, when each
   resets, and whether you are ahead of the time gone by.
+- **Memory** per session: what its process and everything it started take on your Mac, dev
+  servers left running after their turn (or after the session went to sleep) included. A card
+  shows it from 1 GB (red from 3 GB), the conversation lists each process with Stop, and the
+  sidebar sums your sessions and warns when the Mac runs short of memory.
 - **Context and cost** per session, background work running now, the task list of the current
   turn, unread marks, urgency colours, macOS notifications and a Dock badge when a session asks, and
   an optional chime when a session finishes or asks (heard while you look at the board too).

@@ -8,6 +8,7 @@ import { backgroundOf } from "./background"
 import { board, itemOf, type BoardItem } from "./board"
 import { status as bridgeStatus, type Limits, type Permission } from "./bridge"
 import { canRunCommands } from "./commands"
+import { memoryNow, memoryOf } from "./memory"
 import { readDesktop, type DesktopIndex } from "./desktop"
 import { lookup as prLookup, type Pr } from "./github"
 import { running } from "./launch"
@@ -45,6 +46,7 @@ export type Group = {
 let groups = new Map<string, Group>() // any CLI id → its group, as of the last snapshot
 
 export const groupOf = (id: string) => groups.get(id)
+export const knownSessionIds = () => new Set(groups.keys())
 
 function groupSessions(sessions: Session[], desktop: DesktopIndex) {
   const byKey = new Map<string, Session[]>()
@@ -238,7 +240,13 @@ export async function snapshot() {
     (c): c is Card => c !== null,
   )
   groups = next
-  const cards = built.filter(c => c.column !== "archived").sort((a, b) => b.lastActivity - a.lastActivity)
+  // What each session's processes take in memory (lib/memory.ts), read in
+  // the background: a card gets the last reading.
+  const memory = memoryNow(new Set(next.keys()))
+  const cards = built
+    .filter(c => c.column !== "archived")
+    .sort((a, b) => b.lastActivity - a.lastActivity)
+    .map(c => ({ ...c, memory: memoryOf(next.get(c.id)?.ids ?? [c.id]) }))
   const done = cards.filter(c => c.column === "done").slice(0, DONE_SHOWN)
   const visible = [...cards.filter(c => c.column !== "done"), ...done]
 
@@ -256,6 +264,7 @@ export async function snapshot() {
     limits: accountLimits(built.map(c => c.bridge.limits)),
     uploadsBytes: await folderSize(),
     canRunCommands: canRunCommands(),
+    memory: { total: visible.reduce((sum, c) => sum + (c.memory?.total ?? 0), 0), pressure: memory.pressure },
     features: { organizer },
   }
 }
