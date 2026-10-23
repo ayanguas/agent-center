@@ -68,7 +68,12 @@ export function dragHandler({ onStart, onMove, onDrop, onClick }) {
     // The pointer is captured only once a drag starts: captured at the press,
     // clicks and double clicks would land on `el` instead of what was under
     // the pointer (a zone's name could not be double-clicked to rename it).
+    // So the moves and the release are heard on the window: on `el` alone, a
+    // quick move off a small target (a resize corner) before the drag starts
+    // would leave the press unfinished, and the next pass over it would drag.
     const move = ev => {
+      if (ev.pointerId !== e.pointerId) return
+      if (ev.buttons === 0) return end(ev, false) // let go where no release reached the page
       const dx = ev.clientX - startX
       const dy = ev.clientY - startY
       if (!isDragging && Math.hypot(dx, dy) < 4) return
@@ -81,15 +86,16 @@ export function dragHandler({ onStart, onMove, onDrop, onClick }) {
       }
       onMove(dx, dy, ev)
     }
-    const up = ev => {
-      el.removeEventListener("pointermove", move)
-      el.removeEventListener("pointerup", up)
-      el.removeEventListener("pointercancel", up)
+    const end = (ev, isRelease) => {
+      window.removeEventListener("pointermove", move)
+      window.removeEventListener("pointerup", up)
+      window.removeEventListener("pointercancel", up)
       if (isDragging) onDrop(ev.clientX - startX, ev.clientY - startY, ev)
-      else if (ev.type === "pointerup") onClick?.(ev)
+      else if (isRelease) onClick?.(ev)
     }
-    el.addEventListener("pointermove", move)
-    el.addEventListener("pointerup", up)
-    el.addEventListener("pointercancel", up)
+    const up = ev => ev.pointerId === e.pointerId && end(ev, ev.type === "pointerup")
+    window.addEventListener("pointermove", move)
+    window.addEventListener("pointerup", up)
+    window.addEventListener("pointercancel", up)
   }
 }

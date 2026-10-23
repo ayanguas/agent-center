@@ -692,7 +692,7 @@ export function Canvas({ cards, zones: savedZones, notes: savedNotes, isDrawingZ
   return html`<div class="canvas-wrap" ref=${wrap}>
     <div class=${`canvas-frame ${isZoomed ? "zoomed" : ""}`} ref=${frame}>
     <div class="canvas-sizer" style=${`width:${width * scale}px;height:${height * scale}px`}>
-    <div class="canvas-area col-canvas" style=${`width:${width}px;height:${height}px;transform:scale(${scale})`}
+    <div class="canvas-area col-canvas" style=${`width:${width}px;height:${height}px;transform:scale(${scale});--unscale:${1 / scale}`}
       onPointerDown=${onBackground}
       onDblClick=${e => {
         // A double click on the empty canvas leaves a note there.
