@@ -76,7 +76,7 @@ export function Files({ id, file }) {
   </div>`
 }
 
-export function FileViewer({ id, path }) {
+function FileViewer({ id, path }) {
   const ui = useContext(Ctx)
   const [info, setInfo] = useState(null)
   const [text, setText] = useState(null)

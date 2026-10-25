@@ -29,7 +29,7 @@ const git = (cwd: string, args: string[], timeoutMs = 10_000) => run(["git", "-C
 
 // The commit where this branch left the default branch; HEAD on the default
 // branch itself, so only unpushed and uncommitted work shows.
-async function baseOf(cwd: string, branch: string | null) {
+async function baseOf(cwd: string) {
   const remoteHead = (await git(cwd, ["symbolic-ref", "--short", "refs/remotes/origin/HEAD"])) ?? null
   const candidates = [remoteHead, "origin/main", "origin/master", "main", "master"].filter(Boolean) as string[]
   for (const ref of candidates) {
@@ -103,7 +103,7 @@ export async function changesOf(cwd: string): Promise<Changes | null> {
   const root = await git(cwd, ["rev-parse", "--show-toplevel"])
   if (!root) return null
   const branch = (await git(cwd, ["rev-parse", "--abbrev-ref", "HEAD"])) ?? null
-  const base = await baseOf(cwd, branch)
+  const base = await baseOf(cwd)
   const raw = (await git(cwd, ["diff", "--no-color", "--no-ext-diff", "-M", base.sha], 20_000)) ?? ""
   const truncated = raw.length > MAX_DIFF
   const files = [...parse(truncated ? raw.slice(0, raw.lastIndexOf("\ndiff --git ", MAX_DIFF)) : raw), ...(await untracked(cwd, root))]

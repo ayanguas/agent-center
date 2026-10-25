@@ -298,7 +298,7 @@ export function BackgroundChip({ card }) {
   if (!list.length) return null
   const title = list.map(t => `• ${bgTitle(t)} (${BG_LABEL[t.type] ?? t.type}, ${ago(t.since, ui.now)})`).join("\n")
   const label = list.every(t => t.type === "current") ? (list.length === 1 ? "1 long command" : `${list.length} long commands`) : `${list.length} running`
-  return html`<span class="tag tone-work bg-chip" title=${`Running now:\n${title}`}>
+  return html`<span class="tag bg-chip" title=${`Running now:\n${title}`}>
     <span class="dot run"></span>${label}</span>`
 }
 
@@ -354,7 +354,7 @@ export function BackgroundBox({ card }) {
 const MB = 1024 ** 2
 const GB = 1024 ** 3
 export const MEMORY_WARN = 1 * GB // the card shows it from here, orange
-export const MEMORY_HIGH = 3 * GB // and red from here
+const MEMORY_HIGH = 3 * GB // and red from here
 export const memText = b => (b >= GB ? `${(b / GB).toLocaleString("en-GB", { maximumFractionDigits: 1 })} GB` : `${Math.max(1, Math.round(b / MB))} MB`)
 
 // On a card, once it takes 1 GB: the total, and what takes it in the tooltip.

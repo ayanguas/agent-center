@@ -170,6 +170,10 @@ export async function rescan(sessionIds: Set<string>) {
 export async function stopProcess(sessionIds: string[], pid: number) {
   const found = sessionIds.map(id => latest.bySession.get(id)).flatMap(s => s?.items ?? []).find(i => i.pid === pid)
   if (!found || found.kind === "session") return false
+  // The reading may be 20 s old: the process must still be the same one,
+  // not another that got its number since.
+  const now = await exec(["/bin/ps", "-ww", "-o", "command=", "-p", String(pid)], { timeoutMs: 3000 })
+  if (now.stdout.trim().slice(0, 3000) !== found.command.trim()) return false
   await killTree(pid)
   return true
 }

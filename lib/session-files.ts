@@ -44,7 +44,14 @@ function note(scan: Scan, raw: unknown, source: FileRef["source"], at: number, u
 function mentions(text: string) {
   const out: string[] = []
   for (const m of text.matchAll(/`((?:~|\/)[^`\n]{1,300}?\.[A-Za-z0-9]{1,8})`/g)) out.push(m[1]!)
-  for (const m of text.matchAll(/\]\(([^)\s]{1,300}?\.[A-Za-z0-9]{1,8})(?::\d+)?\)/g)) if (!/^[a-z]+:/i.test(m[1]!)) out.push(decodeURI(m[1]!))
+  for (const m of text.matchAll(/\]\(([^)\s]{1,300}?\.[A-Za-z0-9]{1,8})(?::\d+)?\)/g)) {
+    if (/^[a-z]+:/i.test(m[1]!)) continue
+    try {
+      out.push(decodeURI(m[1]!))
+    } catch {
+      out.push(m[1]!) // a stray % in the link: keep it as written
+    }
+  }
   return out
 }
 
