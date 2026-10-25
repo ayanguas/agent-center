@@ -59,7 +59,7 @@ function App() {
   const [showDone, setShowDoneRaw] = useState(load("showDone", false))
   const [groupBy, setGroupByRaw] = useState(load("groupBy", "none"))
   const [selected, setSelected] = useState(null)
-  const [reader, setReader] = useState(null) // { id, tab }
+  const [reader, setReader] = useState(null) // { id, tab, file }
   // What the reader pane draws: the open reader, or the one closing, kept
   // until its slide-out ends.
   const [shown, setShown] = useState(null)
@@ -582,6 +582,8 @@ function App() {
     reply, rename,
     closeReader: () => (setReader(null), setSelected(null)),
     setReaderTab: tab => setReader(r => ({ ...r, tab })),
+    // One of the open session's files, in its Files tab.
+    showFile: file => setReader(r => r && { ...r, tab: "files", file }),
     openDialog: name => (setSideOpen(false), setDialog(name)),
     fillComposer: text => composerFocus.current?.fill(text),
     openRun: card => setRunFor(card),
@@ -642,7 +644,7 @@ function App() {
       <div class="reader-slot">
         ${shown && html`<div class="reader-resize" onPointerDown=${resizeReader} onDblClick=${() => (setReaderWRaw(null), keep("readerW", null))}
           title="Drag to change the width · double-click: default width"></div>`}
-        ${shown && html`<${Reader} key=${shown.id} id=${shown.id} card=${readerCard} result=${readerResult} tab=${shown.tab} isWide=${wantsWide}
+        ${shown && html`<${Reader} key=${shown.id} id=${shown.id} card=${readerCard} result=${readerResult} tab=${shown.tab} file=${shown.file} isWide=${wantsWide}
           hasTasks=${data?.features?.organizer !== false} />`}
       </div>
       <${Toasts} toasts=${toasts} />

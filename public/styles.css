@@ -1464,3 +1464,49 @@ a.file-chip:hover { border-color: var(--line-strong); }
 .setup-note pre { margin: 6px 0 0; padding: 8px 10px; border-radius: 8px; background: var(--side); border: 1px solid var(--line); white-space: pre-wrap; }
 .setup-actions { display: flex; gap: 8px; justify-content: flex-end; }
 .setup-actions:not(:empty) { margin-top: 10px; }
+
+/* a session's files (files.js): chips and artifact cards in the conversation,
+   the Files tab with its list and viewer */
+button.file-chip { cursor: pointer; font: inherit; font-size: 12.5px; }
+@media (hover: hover) { button.file-chip:hover { border-color: var(--line-strong); } }
+.file-ext {
+  flex: none; min-width: 26px; height: 18px; padding: 0 4px; border-radius: 4px; display: inline-flex; align-items: center; justify-content: center;
+  background: var(--hover); color: var(--muted); font: 600 9.5px var(--mono); text-transform: uppercase;
+}
+.files-msg { display: flex; flex-direction: column; gap: 4px; }
+.files-caption { margin: 0; font-size: 12.5px; color: var(--muted); }
+.artifact-card { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); max-width: 520px; }
+.artifact-card .icon { color: var(--accent); flex: none; }
+.artifact-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.artifact-main b { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.artifact-main small { font-size: 11.5px; color: var(--faint); }
+.artifact-card .btn { flex: none; text-decoration: none; }
+
+.files-tab { display: flex; flex-direction: column; min-height: 0; height: 100%; }
+.files-list { flex: none; list-style: none; margin: 0; padding: 6px; max-height: 30%; overflow: auto; border-bottom: 1px solid var(--line); }
+.files-list li.muted { padding: 8px 10px; font-size: 12.5px; }
+.files-list button { display: flex; align-items: center; gap: 8px; width: 100%; height: 30px; padding: 0 8px; border-radius: 7px; font-size: 12.5px; color: var(--text); text-align: left; }
+.files-list button.on { background: var(--select); }
+@media (hover: hover) { .files-list button:not(.on):hover { background: var(--hover); } }
+.files-list .t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.files-list small { flex: none; font-size: 11px; color: var(--faint); }
+.file-view { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.file-head { flex: none; display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+.file-name { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.file-name b { font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.file-name small { font-size: 11.5px; color: var(--faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.file-body { flex: 1; min-height: 0; overflow: auto; }
+.file-body > .muted { padding: 16px; }
+.file-md { max-width: 760px; margin: 0 auto; padding: 18px 22px 40px; font-size: 14.5px; line-height: 1.65; }
+.file-md h1 { font-size: 24px; line-height: 1.25; margin: 0 0 14px; }
+.file-md h2 { font-size: 19px; margin: 24px 0 10px; }
+.file-md h3 { font-size: 16px; margin: 18px 0 8px; }
+.file-md table { border-collapse: collapse; margin: 0 0 12px; font-size: 13px; }
+.file-md th, .file-md td { border: 1px solid var(--line); padding: 5px 8px; text-align: left; vertical-align: top; }
+.file-text { margin: 0; padding: 14px 16px; font: 12px/1.55 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; }
+.file-img { display: block; max-width: 100%; margin: 14px auto; border-radius: 8px; }
+.file-frame { display: block; width: 100%; height: 100%; min-height: 480px; border: 0; background: #fff; }
+
+/* a path Claude names, opened in the Files tab */
+.file-link { cursor: pointer; text-decoration: underline dotted; text-underline-offset: 3px; }
+@media (hover: hover) { .file-link:hover { color: var(--accent); } }

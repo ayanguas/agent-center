@@ -45,7 +45,17 @@ export const plain = s =>
 export function md(text) {
   const html = window.marked ? window.marked.parse(String(text ?? ""), { breaks: true }) : ""
   const clean = window.DOMPurify ? window.DOMPurify.sanitize(html, { ADD_ATTR: ["target"] }) : ""
-  return clean.includes("<pre") ? withCopyButtons(clean) : clean
+  return /<pre|<code|<a /.test(clean) ? enhance(clean) : clean
+}
+
+// A path Claude names (`/Users/…/report.md`, `~/x.py`, a link to a file of
+// the session's folder) opens the file in the Files tab (files.js); the
+// server shows it only if the session's transcript names it.
+const PATH_CODE = /^(?:~|\/)[^\n]{1,300}\.[A-Za-z0-9]{1,8}$/
+function fileLink(el, path) {
+  el.classList.add("file-link")
+  el.dataset.path = path
+  el.title = `Open ${path.split("/").pop()} here`
 }
 
 // Each code block gets a copy button, and a shell block a run button (shown
@@ -54,9 +64,20 @@ export function md(text) {
 const SHELL = /\blanguage-(bash|sh|shell|zsh)\b/
 const RUN_ICON = `<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 4.5v15l12.5-7.5z"/></svg>`
 const COPY_ICON = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"/></svg>`
-function withCopyButtons(html) {
+function enhance(html) {
   const t = document.createElement("template")
   t.innerHTML = html
+  for (const code of t.content.querySelectorAll(":not(pre) > code")) if (PATH_CODE.test(code.textContent.trim())) fileLink(code, code.textContent.trim())
+  for (const a of t.content.querySelectorAll("a[href]")) {
+    const href = a.getAttribute("href")
+    if (/^([a-z][a-z0-9+.-]*:|#)/i.test(href)) continue
+    let path = href
+    try {
+      path = decodeURI(href)
+    } catch {}
+    a.removeAttribute("href")
+    fileLink(a, path.replace(/:\d+(:\d+)?$/, ""))
+  }
   for (const pre of t.content.querySelectorAll("pre")) {
     const box = document.createElement("div")
     box.className = "code-box"

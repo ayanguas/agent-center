@@ -15,6 +15,7 @@ import { readTasks } from "../lib/organizer"
 import { branchState, knownRepos, repoInfo } from "../lib/repo"
 import { commandFor, status as runStatus, suggest as suggestRun } from "../lib/runner"
 import { search } from "../lib/search"
+import { sessionFile, sessionFiles } from "../lib/session-files"
 import { setupStatus } from "../lib/setup"
 import { readSessions } from "../lib/sessions"
 import { groupOf, prRefs } from "../lib/snapshot"
@@ -66,6 +67,23 @@ async function sentFile(rel: string) {
 // A byte offset in a query string, or undefined; NaN when not one.
 const offset = (value: string | null) => (value === null ? undefined : Number(value))
 
+// A session's file for the viewer: text as text (markdown is drawn by the
+// page), pictures and PDFs as they are, HTML in a sandbox (no scripts' access
+// to this board), anything else for download.
+const TEXT_EXT = /^(md|markdown|txt|text|log|csv|tsv|json|jsonl|ya?ml|toml|ini|env|xml|svg|sql|sh|zsh|bash|py|rb|go|rs|java|kt|swift|c|h|cpp|hpp|cs|php|js|jsx|ts|tsx|mjs|cjs|css|scss|vue|svelte|astro|graphql|proto|tf|dockerfile|gitignore|lock)$/
+const MEDIA: Record<string, string> = {
+  png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp", avif: "image/avif", ico: "image/x-icon", bmp: "image/bmp",
+  pdf: "application/pdf", mp4: "video/mp4", mov: "video/quicktime", webm: "video/webm", mp3: "audio/mpeg", wav: "audio/wav",
+}
+function viewable(path: string, ext: string) {
+  const headers: Record<string, string> = { "x-content-type-options": "nosniff", "cache-control": "no-store" }
+  if (ext === "html" || ext === "htm") Object.assign(headers, { "content-type": "text/html; charset=utf-8", "content-security-policy": "sandbox allow-scripts" })
+  else if (TEXT_EXT.test(ext) || ext === "") headers["content-type"] = "text/plain; charset=utf-8"
+  else if (MEDIA[ext]) headers["content-type"] = MEDIA[ext]
+  else Object.assign(headers, { "content-type": "application/octet-stream", "content-security-policy": "sandbox", "content-disposition": "attachment" })
+  return new Response(Bun.file(path), { headers })
+}
+
 async function sessionRead(id: string, what: string, url: URL) {
   const group = groupOf(id)
   switch (what) {
@@ -108,6 +126,18 @@ async function sessionRead(id: string, what: string, url: URL) {
         cwd: group.lead.cwd,
         run: await runStatus(id),
       })
+    // The "Files" tab: what the session sent, published or wrote.
+    case "files":
+      return json({ files: await sessionFiles(group?.ids ?? [id]) })
+    // One of its files: what it is (fileinfo), then its bytes (file).
+    case "fileinfo":
+    case "file": {
+      const file = await sessionFile(group?.ids ?? [id], url.searchParams.get("path") ?? "", group ? [group.lead.cwd, group.root] : [])
+      if (!file) return json({ error: "This session does not name that file, or it is gone" }, 404)
+      if (what === "fileinfo") return json(file)
+      if (!file.isViewable) return json({ error: "Too large to show here: open it on the Mac" }, 413)
+      return viewable(file.path, file.ext)
+    }
     case "tasks": {
       await refreshLinks()
       const ids = group?.ids ?? [id]

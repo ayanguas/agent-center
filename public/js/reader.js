@@ -1,7 +1,7 @@
 // The right pane: one session, with its state, title (renamed here), actions
-// and four tabs: the conversation with its reply box (conversation.js,
-// composer.js), the changes (changes.js), the PRs (prs.js) and the tasks
-// (tasks.js). It also keeps the messages sent from here until the transcript
+// and five tabs: the conversation with its reply box (conversation.js,
+// composer.js), the changes (changes.js), the PRs (prs.js), the files it
+// sent or wrote (files.js) and the tasks (tasks.js). It also keeps the messages sent from here until the transcript
 // has them, and polls the session's bridge mod for what it holds.
 import { html, useContext, useEffect, useRef, useState } from "../vendor/preact-htm.js"
 import { Changes } from "./changes.js"
@@ -9,6 +9,7 @@ import { Actions, RepoTag, StatusChip } from "./components.js"
 import { Composer } from "./composer.js"
 import { Conversation } from "./conversation.js"
 import { Ctx } from "./ctx.js"
+import { Files } from "./files.js"
 import { Icon } from "./icons.js"
 import { Prs } from "./prs.js"
 import { Tasks } from "./tasks.js"
@@ -70,11 +71,12 @@ const TABS = [
   ["chat", "chat", "Conversation"],
   ["changes", "diff", "Changes"],
   ["prs", "pr", "PRs"],
+  ["files", "file", "Files"],
   ["tasks", "tasks", "Tasks"],
 ]
 
 // hasTasks: the organizer is on (lib/setup.ts); without it there is no Tasks tab.
-export function Reader({ id, card, result, tab: asked, isWide, hasTasks = true }) {
+export function Reader({ id, card, result, tab: asked, file, isWide, hasTasks = true }) {
   const tabs = hasTasks ? TABS : TABS.filter(([key]) => key !== "tasks")
   const tab = tabs.some(([key]) => key === asked) ? asked : "chat"
   const ui = useContext(Ctx)
@@ -148,7 +150,7 @@ export function Reader({ id, card, result, tab: asked, isWide, hasTasks = true }
         <${Icon} name=${icon} size=${14} /><span class="tab-label">${label}</span>${counts[key] > 0 && html`<span class="count">${counts[key]}</span>`}</button>`)}
     </nav>
     <div class="tab-panel" id="reader-panel" role="tabpanel" aria-labelledby=${`reader-tab-${tab}`}>
-      ${tab === "changes" ? html`<${Changes} id=${id} onSend=${sendText} />` : tab === "prs" ? html`<${Prs} id=${id} onSend=${sendText} />` : tab === "chat"
+      ${tab === "changes" ? html`<${Changes} id=${id} onSend=${sendText} />` : tab === "prs" ? html`<${Prs} id=${id} onSend=${sendText} />` : tab === "files" ? html`<${Files} id=${id} file=${file} />` : tab === "chat"
         ? html`<${Conversation} id=${id} card=${card} pending=${allPending} onUnsend=${unsend} stuck=${bridge?.stuck ?? []}
               isOpen=${!!bridge?.isOpen} untrusted=${!!bridge?.wake?.untrusted} question=${bridge?.question}
               permission=${bridge?.permission} failed=${bridge?.failed ?? []}

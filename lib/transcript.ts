@@ -57,6 +57,9 @@ export type Item = { key: string } & (
   | { kind: "dialog"; label: string; detail: string | null; isLong: boolean; answer: string | null }
   | { kind: "plan"; steps: PlanStep[] }
   | { kind: "planStep"; op: PlanOp }
+  // Files Claude showed you (SendUserFile) and pages it published (Artifact).
+  | { kind: "files"; paths: string[]; caption: string | null }
+  | { kind: "artifact"; path: string | null; url: string | null }
 )
 
 const pathCache = new Map<string, string>()
@@ -207,6 +210,11 @@ function toItems(rows: any[]): Item[] {
             if (Array.isArray(input.items))
               items.push({ key, kind: "plan", steps: input.items.map((i: any) => ({ content: String(i.content ?? ""), status: i.status ?? "pending" })) })
             else items.push({ key, kind: "planStep", op: { advance: !!input.advance, done: input.done, start: input.start } })
+          } else if (name === "SendUserFile" && Array.isArray(block.input?.files))
+            items.push({ key, kind: "files", paths: block.input.files.map(String), caption: block.input.caption ?? null })
+          else if (name === "Artifact" && (!block.input?.action || block.input.action === "publish") && !block.input?.asset) {
+            const url = results.get(block.id)?.match(/https:\/\/claude\.ai\/[\w/.-]+/)?.[0] ?? null
+            items.push({ key, kind: "artifact", path: block.input?.file_path ?? null, url })
           } else if (dialogOf(name, block.input)) {
             const result = results.get(block.id)
             const answer = result === undefined ? null : (result.split("\n").find(l => l.trim()) ?? "Answered").slice(0, 300)

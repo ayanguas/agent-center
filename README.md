@@ -16,6 +16,11 @@ sessions through a small Claude Code mod, and keeps its own state in a folder of
   drag and drop, and lanes per repo (`G`). **Canvas** (`3`): cards you place anywhere,
   with named zones, sticky notes (also attached to cards, with checklists), zoom, multi-select
   and a Done strip at the bottom.
+- **Files** Claude shows you, as in Claude desktop's side panel: a file it sends is a chip in the
+  conversation, a path it names is a link, and the **Files** tab lists what the session sent,
+  published or wrote, with a viewer (markdown rendered, code, images, PDFs, HTML in a sandbox) and
+  "Open on the Mac". Only files the session's own transcript names are served. Published
+  artifacts link to claude.ai.
 - **Code blocks** in a conversation wrap their lines and have a Copy button; with **Run
   commands** on (Setup), a shell block also has Run: it runs on your Mac in the session's
   folder, with its output and a Stop button under the block, as in Claude desktop.

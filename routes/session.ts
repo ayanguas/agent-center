@@ -13,6 +13,7 @@ import { launch } from "../lib/launch"
 import { refreshSoon } from "../lib/live"
 import { commandStatus, runCommand, stopCommand } from "../lib/commands"
 import { rescan, stopProcess } from "../lib/memory"
+import { sessionFile } from "../lib/session-files"
 import { saveCommand, start as startRun, status as runStatus, stop as stopRun } from "../lib/runner"
 import { groupOf, knownSessionIds } from "../lib/snapshot"
 import { wokeNow } from "../lib/wake"
@@ -149,6 +150,14 @@ export async function handleSession(id: string, action: string, body: Record<str
     case "open": {
       const res = await openInClient(id)
       return json(res, res.ok || !res.error ? 200 : 409)
+    }
+    // One of the session's files in its own app on the Mac (Word, Excel…).
+    case "openfile": {
+      const group = groupOf(id)
+      const file = await sessionFile(group?.ids ?? [id], String(body.path ?? ""), group ? [group.lead.cwd, group.root] : [])
+      if (!file) return json({ error: "This session does not name that file, or it is gone" }, 404)
+      const opened = (await Bun.spawn(["/usr/bin/open", file.path]).exited) === 0
+      return json(opened ? { ok: true } : { error: "macOS could not open it" }, opened ? 200 : 500)
     }
   }
   if (!isBoardAction(action)) return json({ error: `unknown action: ${action}` }, 400)

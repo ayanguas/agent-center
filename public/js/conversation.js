@@ -9,6 +9,7 @@ import { html, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState
 import { ATTACH_LINES, IMAGE_FILE, UPLOAD_RE, fileName } from "./attachments.js"
 import { BackgroundBox, permit } from "./components.js"
 import { Ctx, Kbd } from "./ctx.js"
+import { ArtifactCard, FileChips } from "./files.js"
 import { Icon } from "./icons.js"
 import { clock, get, md, post } from "./util.js"
 
@@ -291,6 +292,10 @@ function Message({ item, sessionId, onFork, question, picks, onPick }) {
       </div>`
     case "chapter":
       return html`<div class="chapter"><span>${item.title}</span></div>`
+    case "files":
+      return html`<${FileChips} id=${sessionId} paths=${item.paths} caption=${item.caption} />`
+    case "artifact":
+      return html`<${ArtifactCard} id=${sessionId} path=${item.path} url=${item.url} />`
     case "question":
       return html`<${Question} item=${item} sessionId=${sessionId} onPick=${onPick} picked=${picks?.[item.text]}
         isAnswerable=${question?.questions.some(q => q.question === item.text)} />`
@@ -453,7 +458,13 @@ export function Conversation({ id, card, pending, onDelivered, onUnsend, stuck =
     if (stick.current) setHasNew(false)
   }
 
-  return html`<div class="conversation" ref=${box} onScroll=${onScroll} onClick=${e => onCodeClick(e, id)}>
+  // A file Claude names in the text opens in the Files tab.
+  const onClick = e => {
+    const link = e.target.closest?.("[data-path]")
+    if (link) return ui.showFile(link.dataset.path)
+    onCodeClick(e, id)
+  }
+  return html`<div class="conversation" ref=${box} onScroll=${onScroll} onClick=${onClick}>
     ${!page.loaded && html`<div class="skeleton-msgs"><i></i><i></i><i></i></div>`}
     ${page.error && html`<p class="muted center">${page.error}</p>`}
     ${page.hasMore && html`<button class="btn subtle earlier" onClick=${loadEarlier}>Load earlier messages</button>`}

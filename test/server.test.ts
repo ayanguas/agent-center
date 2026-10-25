@@ -65,6 +65,20 @@ beforeAll(async () => {
     { type: "api-request-blob", sessionId: HELPER, message: { role: "assistant", content: [launch] } },
   ]
   await writeFile(join(home, ".claude", "projects", "demo", `${HELPER}.jsonl`), helperRows.map(r => JSON.stringify(r)).join("\n") + "\n")
+  // The dev-server session sent a report and published a page.
+  await writeFile(join(home, "report.md"), "# Zebra report\n\nAll good.\n")
+  await writeFile(join(home, "page.html"), "<title>Page</title><p>Hi</p>")
+  const fileRows = [
+    { type: "assistant", uuid: "f1", cwd: home, timestamp: new Date(now - 3000).toISOString(), message: { role: "assistant", content: [
+      { type: "tool_use", id: "toolu_f1", name: "SendUserFile", input: { files: ["report.md"], caption: "The report" } },
+      { type: "tool_use", id: "toolu_f2", name: "Artifact", input: { file_path: join(home, "page.html") } },
+    ] } },
+    { type: "user", uuid: "f2", cwd: home, timestamp: new Date(now - 2000).toISOString(), message: { role: "user", content: [
+      { type: "tool_result", tool_use_id: "toolu_f1", content: "sent" },
+      { type: "tool_result", tool_use_id: "toolu_f2", content: "Published: https://claude.ai/code/artifact/abc-123" },
+    ] } },
+  ]
+  await writeFile(join(home, ".claude", "projects", "demo", `${SERVER}.jsonl`), fileRows.map(r => JSON.stringify(r)).join("\n") + "\n")
   // The desktop app keeps a copy of the session's record per account folder:
   // the old one (read last) still names a CLI session that is gone.
   const desktop = join(home, "Library", "Application Support", "Claude", "claude-code-sessions")
@@ -275,4 +289,24 @@ describe("memory", () => {
       if (pid) try { process.kill(pid, "SIGKILL") } catch {}
     }
   }, 40_000)
+})
+
+describe("files of a session", () => {
+  test("shows what it sent and published, and nothing it did not name", async () => {
+    const page = await jsonOf(fetch(`${base()}/api/sessions/${SERVER}/messages`))
+    expect(page.items.find((i: any) => i.kind === "files").paths).toEqual(["report.md"])
+    expect(page.items.find((i: any) => i.kind === "artifact").url).toBe("https://claude.ai/code/artifact/abc-123")
+
+    const { files } = await jsonOf(fetch(`${base()}/api/sessions/${SERVER}/files`))
+    expect(files.map((f: any) => [f.name, f.source])).toEqual(expect.arrayContaining([["report.md", "sent"], ["page.html", "artifact"]]))
+
+    const at = (path: string) => fetch(`${base()}/api/sessions/${SERVER}/file?path=${encodeURIComponent(path)}`)
+    expect(await (await at("report.md")).text()).toContain("Zebra report")
+    const html = await at(join(home, "page.html"))
+    expect(html.headers.get("content-security-policy")).toContain("sandbox")
+    expect((await at("/etc/hosts")).status).toBe(404)
+    expect((await at(join(home, ".claude", "settings.json"))).status).toBe(404)
+    // Another session did not name it.
+    expect((await fetch(`${base()}/api/sessions/${ID}/file?path=${encodeURIComponent(join(home, "report.md"))}`)).status).toBe(404)
+  })
 })
