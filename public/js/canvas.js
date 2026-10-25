@@ -213,6 +213,28 @@ function Zone({ zone, scale, bounds, onChange, onRemove, onMoveWith, isNew = fal
   </section>`
 }
 
+// The done sessions "Done" has no room for: open, reopen or archive each.
+function DoneList({ cards, bottom, onClose }) {
+  const ui = useContext(Ctx)
+  const ref = useRef()
+  useEffect(() => {
+    const away = e => !ref.current?.contains(e.target) && !e.target.closest?.(".done-more-tile") && onClose()
+    const esc = e => e.key === "Escape" && (e.stopPropagation(), onClose())
+    window.addEventListener("pointerdown", away, true)
+    window.addEventListener("keydown", esc, true)
+    return () => (window.removeEventListener("pointerdown", away, true), window.removeEventListener("keydown", esc, true))
+  }, [])
+  return html`<div class="done-list" ref=${ref} style=${`bottom:${bottom}px`} role="dialog" aria-label="More done sessions">
+    <header><${Icon} name="check" size=${13} />${cards.length} more done</header>
+    <ul>${cards.map(card => html`<li key=${card.id}>
+      <button class="done-list-open" onClick=${() => (onClose(), ui.openReader(card.id))} title="Open the conversation">
+        <span class="t">${card.title}</span><small>${card.repo} · ${ageText(card, ui.now)}</small></button>
+      <button class="icon-btn" title="Reopen: back on the canvas" onClick=${() => ui.act(card, "undone")}><${Icon} name="undo" size=${14} /></button>
+      <button class="icon-btn" title="Archive" onClick=${() => ui.act(card, "archive")}><${Icon} name="archive" size=${14} /></button>
+    </li>`)}</ul>
+  </div>`
+}
+
 // Space pans the canvas, except on these: there it presses, ticks or scrolls.
 const SPACE_KEEPS = "button, a[href], summary, input, [role=button], [role=checkbox], [role=radio], [role=option], .reader-slot"
 
@@ -547,10 +569,14 @@ export function Canvas({ cards, zones: savedZones, notes: savedNotes, isDrawingZ
   const height = view.h / Math.min(scale, fit)
   const doneTop = height - DONE_H
   const bounds = { w: width, h: doneTop }
-  // One row; when it is full, the cards overlap like a fanned deck.
-  const room = width - GRID * 2 - CARD_W
-  const step = done.length > 1 ? Math.min(CARD_W + GRID, room / (done.length - 1)) : 0
-  const slotOf = i => ({ x: GRID + i * step, y: DONE_HEAD - GRID / 2 })
+  // One row, as many as the canvas is wide (newest first); the rest wait
+  // behind "+N more", a list with their actions.
+  const slots = Math.max(1, Math.floor((width - GRID) / (CARD_W + GRID)))
+  const shownDone = done.length > slots ? done.slice(0, slots - 1) : done
+  const moreDone = done.slice(shownDone.length)
+  const slotOf = i => ({ x: GRID + i * (CARD_W + GRID), y: DONE_HEAD - GRID / 2 })
+  const [isMoreOpen, setMoreOpen] = useState(false)
+  useEffect(() => void (moreDone.length || setMoreOpen(false)), [moreDone.length])
 
   // Let go above the line: a place on the canvas. Below it: done.
   const dropped = (card, to, ev, el, d) => {
@@ -729,11 +755,14 @@ export function Canvas({ cards, zones: savedZones, notes: savedNotes, isDrawingZ
           <span class="done-hint">${done.length ? "Drop a card here to mark it as done · lift it out to reopen it" : "Drop a card here to mark it as done"}</span>
           ${done.length > 0 && html`<button class="head-btn" onClick=${() => ui.archiveAll(done)}><${Icon} name="archive" size=${13} />Archive all</button>`}
         </header>
-        ${done.map((card, i) => {
+        ${shownDone.map((card, i) => {
           const slot = slotOf(i)
-          return html`<${CanvasCard} key=${card.id} card=${card} scale=${scale} z=${done.length - i + 3}
+          return html`<${CanvasCard} key=${card.id} card=${card} scale=${scale} z=${3}
             at=${{ x: slot.x, y: doneTop + slot.y, left: slot.x, top: slot.y }} onDropped=${dropped} />`
         })}
+        ${moreDone.length > 0 && html`<button class=${`done-more-tile ${isMoreOpen ? "on" : ""}`} aria-expanded=${isMoreOpen}
+          style=${`left:${slotOf(shownDone.length).x}px;top:${slotOf(0).y}px;width:${CARD_W}px`} onClick=${() => setMoreOpen(!isMoreOpen)}>
+          <b>+${moreDone.length}</b><span>more done</span></button>`}
       </section>
     </div>
     </div>
@@ -744,6 +773,7 @@ export function Canvas({ cards, zones: savedZones, notes: savedNotes, isDrawingZ
       <span class="dock-chips">${done.map(card => html`<button key=${card.id} class="tag" onClick=${() => ui.openReader(card.id)}>${card.title}</button>`)}</span>
     </div>`}
     ${isDrawingZone && !draft && html`<div class="zone-draw-hint">Drag to draw the zone · Esc to cancel</div>`}
+    ${isMoreOpen && html`<${DoneList} cards=${moreDone} bottom=${(height - doneTop) * scale + 8} onClose=${() => setMoreOpen(false)} />`}
     <div class="zoom-ctl" title="Zoom: pinch on the trackpad or ⌘ + wheel · keys + − 0. Zooming out gives more room">
       <button class="icon-btn" disabled=${scale <= minZoom + 0.001} onClick=${() => zoomTo(scale / 1.2)} aria-label="Zoom out">−</button>
       <span class="zoom-pct">${Math.round(scale * 100)}%</span>

@@ -802,6 +802,25 @@ mark { background: var(--ask-soft); color: var(--text); border-radius: 3px; padd
 .done-hint { text-transform: none; letter-spacing: 0; font-weight: 450; font-size: 12px; color: var(--faint); }
 .done-area.drop .done-hint { color: var(--work); }
 .done-head .head-btn { margin-left: 8px; }
+/* the done sessions with no room in the row: a tile, and its list */
+.done-more-tile {
+  position: absolute; height: 72px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  border: 1.5px dashed var(--line-strong); border-radius: 12px; color: var(--muted); font-size: 12.5px;
+}
+.done-more-tile b { font-size: 20px; color: var(--text); font-variant-numeric: tabular-nums; }
+.done-more-tile.on, .done-more-tile:focus-visible { border-color: var(--accent); color: var(--text); }
+@media (hover: hover) { .done-more-tile:hover { border-color: var(--accent); background: var(--hover); } }
+.done-list {
+  position: absolute; right: 16px; z-index: 60; width: min(420px, calc(100% - 32px)); max-height: min(60%, 520px); display: flex; flex-direction: column;
+  background: var(--raised); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow-pop); overflow: hidden;
+}
+.done-list header { flex: none; display: flex; align-items: center; gap: 7px; padding: 10px 14px; font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid var(--line); }
+.done-list ul { list-style: none; margin: 0; padding: 6px; overflow: auto; }
+.done-list li { display: flex; align-items: center; gap: 2px; }
+.done-list-open { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; padding: 6px 8px; border-radius: 8px; text-align: left; }
+@media (hover: hover) { .done-list-open:hover { background: var(--hover); } }
+.done-list-open .t { max-width: 100%; font-size: 13px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.done-list-open small { font-size: 11.5px; color: var(--faint); }
 .ccard.state-done { opacity: 0.62; box-shadow: none; }
 .ccard.state-done:hover, .ccard.state-done.selected, .ccard.state-done.reading, .ccard.state-done.dragging { opacity: 1; }
 .ccard.state-done .ctitle { font-weight: 550; }
