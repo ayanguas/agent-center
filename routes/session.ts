@@ -6,15 +6,15 @@
 import { applyAction, isBoardAction } from "../lib/board"
 import { answer as answerQuestion, isBusy, permit, requestSettings, send as sendMessage, status as bridgeStatus, stop as stopTurn, unsend } from "../lib/bridge"
 import { activate, openInClient } from "../lib/client"
+import { commandStatus, runCommand, stopCommand } from "../lib/commands"
 import { EFFORTS, MODES } from "../lib/config"
 import { forkPoint } from "../lib/fork"
 import { errorMessage, json } from "../lib/http"
 import { launch } from "../lib/launch"
-import { refreshSoon } from "../lib/live"
-import { commandStatus, runCommand, stopCommand } from "../lib/commands"
+import { latestJson, refreshSoon } from "../lib/live"
 import { rescan, stopProcess } from "../lib/memory"
-import { sessionFile } from "../lib/session-files"
 import { saveCommand, start as startRun, status as runStatus, stop as stopRun } from "../lib/runner"
+import { sessionFile } from "../lib/session-files"
 import { groupOf, knownSessionIds } from "../lib/snapshot"
 import { wokeNow } from "../lib/wake"
 
@@ -41,8 +41,11 @@ async function fork(id: string, body: Record<string, unknown>) {
   const point = await forkPoint([id, ...group.ids.filter(x => x !== id)], String(body.messageId ?? ""))
   if (!point) return json({ error: "Cannot find that message in the conversation" }, 404)
   const resume = point.answerId ? ["--resume", point.sessionId, "--fork-session", "--resume-session-at", point.answerId] : []
+  // The copy keeps the original's permission mode: one in plan or ask mode
+  // must not start editing on its own.
+  const mode = MODES.includes(String(group.lead.mode)) ? String(group.lead.mode) : "default"
   try {
-    const forked = await launch(group.lead.cwd, prompt, done => void activate(done), resume)
+    const forked = await launch(group.lead.cwd, prompt, done => void activate(done), resume, mode)
     refreshSoon()
     return json({ ok: true, id: forked })
   } catch (err) {
@@ -66,6 +69,8 @@ async function settings(id: string, body: Record<string, unknown>) {
 }
 
 export async function handleSession(id: string, action: string, body: Record<string, unknown>): Promise<Response> {
+  // Right after a restart no snapshot has run yet: the sessions are unknown.
+  if (!groupOf(id)) await latestJson()
   switch (action) {
     case "send":
       return send(id, body)

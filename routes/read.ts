@@ -85,6 +85,7 @@ function viewable(path: string, ext: string) {
 }
 
 async function sessionRead(id: string, what: string, url: URL) {
+  if (!groupOf(id)) await latestJson() // right after a restart no snapshot has run yet
   const group = groupOf(id)
   switch (what) {
     case "messages": {
