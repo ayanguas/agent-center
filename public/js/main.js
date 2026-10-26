@@ -49,6 +49,10 @@ function App() {
   const [notify, setNotifyRaw] = useState(() => (permission() === "denied" ? "blocked" : load("notify", "off")))
   // A chime when a session ends its turn or asks you something: "on" or "off".
   const [sound, setSoundRaw] = useState(() => load("sound", "off"))
+  // Read aloud (Setup): what a session did when its turn ends, for every
+  // session ("all"), only the ones with the bell ("watched") or none ("off").
+  const [speech, setSpeechRaw] = useState(() => load("speech", { mode: "off", voice: null, rate: null }))
+  const setSpeech = next => (setSpeechRaw(next), keep("speech", next))
   // Sessions you asked to hear about once (the bell on a card): a chime, a
   // note and, in another window, a notification when the turn ends or asks.
   const [watched, setWatchedRaw] = useState(() => new Set(load("watched", [])))
@@ -153,6 +157,16 @@ function App() {
     if (sound === "on" && before && wasWorking) {
       if (asking.some(c => !before.has(c.id))) chime("ask")
       else if ([...wasWorking].some(id => !working.current.has(id) && data.cards.some(c => c.id === id && c.column !== "archived"))) chime("done")
+    }
+    // Read aloud: its recap, in the Mac's voice (lib/speech.ts). Not the
+    // session you are reading on the board right now.
+    if (speech.mode !== "off" && before && wasWorking) {
+      for (const c of data.cards) {
+        const isNew = (wasWorking.has(c.id) && c.column !== "working" && c.column !== "archived") || (c.column === "asking" && !before.has(c.id))
+        if (!isNew || (speech.mode === "watched" && !watched.has(c.id)) || (reader?.id === c.id && document.hasFocus())) continue
+        const kind = c.column === "asking" ? (c.state === "permission" ? "permission" : "ask") : "done"
+        void post(`/api/sessions/${c.id}/speak`, { kind, voice: speech.voice, rate: speech.rate })
+      }
     }
     // A watched session that ends its turn or starts asking: told once, even
     // with the sound off, then no longer watched.
@@ -624,6 +638,8 @@ function App() {
     stopSession,
     toggleNotify,
     toggleSound,
+    speech,
+    setSpeech,
     registerComposer: fn => (composerFocus.current = fn),
     watched,
     toggleWatch,

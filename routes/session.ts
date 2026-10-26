@@ -12,10 +12,11 @@ import { EFFORTS, MODES } from "../lib/config"
 import { forkPoint } from "../lib/fork"
 import { errorMessage, json } from "../lib/http"
 import { launch } from "../lib/launch"
-import { latestJson, refreshSoon } from "../lib/live"
+import { latestJson, latestState, refreshSoon } from "../lib/live"
 import { rescan, stopProcess } from "../lib/memory"
 import { saveCommand, start as startRun, status as runStatus, stop as stopRun } from "../lib/runner"
 import { sessionFile } from "../lib/session-files"
+import { speakTurn, type Kind } from "../lib/speech"
 import { groupOf, knownSessionIds } from "../lib/snapshot"
 import { wokeNow } from "../lib/wake"
 
@@ -167,6 +168,14 @@ export async function handleSession(id: string, action: string, body: Record<str
       if (!file) return json({ error: "This session does not name that file, or it is gone" }, 404)
       const opened = (await Bun.spawn(["/usr/bin/open", ...(body.reveal ? ["-R"] : []), file.path]).exited) === 0
       return json(opened ? { ok: true } : { error: "macOS could not open it" }, opened ? 200 : 500)
+    }
+    // Its turn ended, or it asks you: read aloud what it did (lib/speech.ts).
+    case "speak": {
+      const group = groupOf(id)
+      const card = (await latestState())?.cards.find(c => c.id === (group?.id ?? id))
+      const kind: Kind = body.kind === "ask" || body.kind === "permission" ? body.kind : "done"
+      const said = await speakTurn(group?.id ?? id, card?.title ?? "Una sesión", kind, { voice: body.voice, rate: body.rate })
+      return json({ ok: true, said })
     }
   }
   if (!isBoardAction(action)) return json({ error: `unknown action: ${action}` }, 400)

@@ -17,6 +17,7 @@ import { branchState, knownRepos, repoInfo } from "../lib/repo"
 import { commandFor, status as runStatus, suggest as suggestRun } from "../lib/runner"
 import { fold, search } from "../lib/search"
 import { sessionFile, sessionFiles } from "../lib/session-files"
+import { defaultVoice, listVoices } from "../lib/speech"
 import { setupStatus } from "../lib/setup"
 import { readSessions } from "../lib/sessions"
 import { groupOf, prRefs } from "../lib/snapshot"
@@ -198,6 +199,7 @@ export async function handleRead(url: URL): Promise<Response | null> {
   if (path === "/api/search") return json({ results: await searchResults(url.searchParams.get("q") ?? "") })
   if (path === "/api/transcribe") return json({ ready: await voiceReady() })
   if (path === "/api/setup") return json(await setupStatus())
+  if (path === "/api/voices") return json({ voices: await listVoices(), default: await defaultVoice() })
   const file = path.match(/^\/api\/uploads\/(.+)$/)
   if (file) return sentFile(decodeURIComponent(file[1]!))
   const session = path.match(/^\/api\/sessions\/([\w-]+)\/(\w+)$/)

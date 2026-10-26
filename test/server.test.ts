@@ -214,6 +214,26 @@ describe("board", () => {
     expect(Object.values(board.items).some((i: any) => i.title === "Renamed")).toBe(true)
   })
 
+  test("reads aloud this turn's recap once, without hashes or paths", async () => {
+    const id = "99999999-8888-7777-6666-555555555555"
+    const at = (n: number) => new Date(Date.now() - n).toISOString()
+    const wrap = (recap: string) => ({ type: "assistant", uuid: `w${recap.length}`, timestamp: at(500), message: { role: "assistant", content: [{ type: "tool_use", id: `toolu_${recap.length}`, name: "mcp__ccd_turn__wrap_up", input: { recap, ask: "¿Lo subo?" } }] } })
+    const rows: object[] = [
+      { type: "user", uuid: "p1", timestamp: at(3000), message: { role: "user", content: "Sube los commits" } },
+      wrap("Subidos a origin/main (d1e92ba → 9abab26) desde ~/code/agent-center/."),
+    ]
+    const file = join(home, ".claude", "projects", "demo", `${id}.jsonl`)
+    await writeFile(file, rows.map(r => JSON.stringify(r)).join("\n") + "\n")
+    const speak = () => jsonOf(post(`/api/sessions/${id}/speak`, { kind: "done" }))
+    const first = await speak()
+    expect(first.said).toMatch(/Subidos a origin\/main desde agent-center\. ¿Lo subo\?$/)
+    expect((await speak()).said).toBeNull() // once
+    // A new prompt: the old recap is not this turn's.
+    rows.push({ type: "user", uuid: "p2", timestamp: at(100), message: { role: "user", content: "Y ahora?" } })
+    await writeFile(file, rows.map(r => JSON.stringify(r)).join("\n") + "\n")
+    expect((await speak()).said).toMatch(/(ha terminado|has finished)\.$/)
+  })
+
   test("finds a session by the name given on the board", async () => {
     await Bun.sleep(1200) // the next snapshot has the name
     const { results } = await jsonOf(fetch(`${base()}/api/search?q=renamed`))

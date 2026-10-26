@@ -61,6 +61,9 @@ sessions through a small Claude Code mod, and keeps its own state in a folder of
   turn, unread marks, urgency colours, macOS notifications and a Dock badge when a session asks, a bell
   on a card to hear once when that session finishes, and
   an optional chime when a session finishes or asks (heard while you look at the board too).
+- **Read aloud** (optional): when a session ends its turn, the Mac says what it did, with `say`:
+  the recap it wrote for Claude desktop's "next step" box, and its question if it asks one. For
+  every session or only the ones with the bell; the voice and speed are yours to pick.
 - **Search** every conversation you ever had (`/` or `⌘K`), archived ones included, in a palette
   as in Claude desktop: tabs, the words marked in the title and a quote, the keyboard to choose.
 - **Tasks** (optional): a markdown task list per project that Claude keeps for you, shown on each
@@ -109,6 +112,7 @@ says what it changes and runs only when you press it:
 | GitHub PRs | Checks that `gh` is installed and signed in, and tells you the command when it is not. | optional |
 | Notifications | macOS notifications when a session asks while you are in another window. | optional |
 | Sound | A short chime when a session finishes its turn or asks you something, also while you look at the board. The speaker in the sidebar turns it on and off. | optional |
+| Read aloud | The Mac says what a session did when its turn ends (its recap), for every session or only the ones with the bell, in the voice and speed you pick. | optional |
 
 Sessions that were already open load the mod the next time they start.
 

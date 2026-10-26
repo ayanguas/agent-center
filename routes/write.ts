@@ -16,6 +16,7 @@ import { addTask, closeTask, reopenTask } from "../lib/organizer"
 import { repoInfo } from "../lib/repo"
 import { runStep, setupStatus } from "../lib/setup"
 import { cleanPrompt } from "../lib/sessions"
+import { speakSample } from "../lib/speech"
 import { groupOf, knownSessionIds } from "../lib/snapshot"
 import { transcribe } from "../lib/transcribe"
 import { openFolder, saveFile } from "../lib/uploads"
@@ -121,6 +122,10 @@ export async function handleWrite(path: string, body: Record<string, unknown>): 
       setTimeout(() => void rescan(knownSessionIds()).then(refreshSoon), 1500)
       return json({ ok: true, stopped })
     }
+    // The read-aloud setting's "Try it".
+    case "/api/speak/sample":
+      await speakSample({ voice: body.voice, rate: body.rate })
+      return json({ ok: true })
     case "/api/uploads/open":
       return json({ ok: await openFolder() })
     case "/api/pick-folder":

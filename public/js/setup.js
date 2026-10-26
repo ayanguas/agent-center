@@ -69,6 +69,38 @@ function StepState({ step }) {
   return html`<span class="setup-state todo">Pending</span>`
 }
 
+// Read aloud: what a session did when its turn ends, said by the Mac
+// (lib/speech.ts). The choice lives in this browser, like the sound.
+const SPEECH_MODES = [["off", "Off"], ["watched", "Only sessions with the bell"], ["all", "Every session"]]
+const DEFAULT_RATE = 190
+
+function ReadAloud() {
+  const { speech, setSpeech } = useContext(Ctx)
+  const [voices, setVoices] = useState(null)
+  useEffect(() => void get("/api/voices").then(res => res && setVoices(res)), [])
+  const voice = speech.voice ?? voices?.default ?? ""
+  // The board's languages: Spanish voices first, then English.
+  const shown = (voices?.voices ?? []).filter(v => /^(es|en)_/.test(v.locale)).sort((a, b) => b.locale.startsWith("es") - a.locale.startsWith("es"))
+  const isOn = speech.mode !== "off"
+  return html`<li class=${`setup-step ${isOn ? "done" : "missing"}`}>
+    <div class="setup-head"><b>Read aloud</b><span class="setup-need need-optional">Optional</span>
+      ${isOn ? html`<span class="setup-state done"><${Icon} name="check" size=${13} />On</span>` : html`<span class="setup-state todo">Off</span>`}</div>
+    <p class="setup-text">When a session ends its turn, the Mac says what it did: the summary it writes at the end (the “next step” box of Claude desktop), and its question if it asks you one. Without a summary it only says that it finished. The session you are reading on the board is not read.</p>
+    <label class="setup-field">Read
+      <select class="field" value=${speech.mode} onChange=${e => setSpeech({ ...speech, mode: e.target.value })}>
+        ${SPEECH_MODES.map(([value, name]) => html`<option key=${value} value=${value}>${name}</option>`)}
+      </select></label>
+    ${isOn && html`<label class="setup-field">Voice
+        <select class="field" value=${voice} onChange=${e => setSpeech({ ...speech, voice: e.target.value })}>
+          ${shown.map(v => html`<option key=${v.name} value=${v.name}>${v.name} · ${v.locale.replace("_", "-")}</option>`)}
+        </select></label>
+      <label class="setup-field">Speed
+        <input type="range" min="120" max="300" step="10" value=${speech.rate ?? DEFAULT_RATE}
+          onChange=${e => setSpeech({ ...speech, rate: Number(e.target.value) })} /></label>`}
+    <div class="setup-actions">${isOn && html`<button class="btn" onClick=${() => post("/api/speak/sample", { voice, rate: speech.rate ?? DEFAULT_RATE })}>Try it</button>`}</div>
+  </li>`
+}
+
 export function Setup({ onClose, notify, sound }) {
   const ui = useContext(Ctx)
   const dialog = useRef()
@@ -147,6 +179,7 @@ export function Setup({ onClose, notify, sound }) {
         <p class="setup-text">A short chime when a session finishes its turn or asks you something, also while you look at the board (notifications only reach you in another window). The speaker in the sidebar turns it on and off.</p>
         <div class="setup-actions"><button class=${`btn ${sound === "on" ? "" : "primary"}`} onClick=${() => ui.toggleSound()}>${sound === "on" ? "Turn off" : "Turn on"}</button></div>
       </li>`}
+      ${status && html`<${ReadAloud} />`}
     </ol>
     <div class="dialog-actions">
       <span class="muted">${status && !status.isReady ? "Required steps are missing: without them the board cannot see or answer the sessions." : ""}</span>
