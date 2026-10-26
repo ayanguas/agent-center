@@ -11,11 +11,12 @@ import { act as prAction } from "../lib/github"
 import { errorMessage, json } from "../lib/http"
 import { launch } from "../lib/launch"
 import { latestState, refreshSoon } from "../lib/live"
+import { rescan, stopForgotten } from "../lib/memory"
 import { addTask, closeTask, reopenTask } from "../lib/organizer"
 import { repoInfo } from "../lib/repo"
 import { runStep, setupStatus } from "../lib/setup"
 import { cleanPrompt } from "../lib/sessions"
-import { groupOf } from "../lib/snapshot"
+import { groupOf, knownSessionIds } from "../lib/snapshot"
 import { transcribe } from "../lib/transcribe"
 import { openFolder, saveFile } from "../lib/uploads"
 
@@ -114,6 +115,12 @@ export async function handleWrite(path: string, body: Record<string, unknown>): 
     }
   }
   switch (path) {
+    // The commands sessions left running and nobody uses, all stopped.
+    case "/api/memory/stopforgotten": {
+      const stopped = await stopForgotten()
+      setTimeout(() => void rescan(knownSessionIds()).then(refreshSoon), 1500)
+      return json({ ok: true, stopped })
+    }
     case "/api/uploads/open":
       return json({ ok: await openFolder() })
     case "/api/pick-folder":

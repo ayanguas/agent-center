@@ -92,7 +92,11 @@ beforeAll(async () => {
   port = 20000 + Math.floor(Math.random() * 20000)
   server = Bun.spawn(["bun", "server.ts"], {
     cwd: join(import.meta.dir, ".."),
-    env: { ...process.env, HOME: home, AGENT_CENTER_HOME: join(home, "state"), AGENT_CENTER_PORT: String(port), AGENT_CENTER_DATA: data, AGENT_CENTER_DRY_RUN: "1" },
+    env: {
+      ...process.env, HOME: home, AGENT_CENTER_HOME: join(home, "state"), AGENT_CENTER_PORT: String(port), AGENT_CENTER_DATA: data, AGENT_CENTER_DRY_RUN: "1",
+      // Memory read each second, and a command idle a moment counts as forgotten.
+      AGENT_CENTER_MEMORY_EVERY_MS: "1000", AGENT_CENTER_FORGOTTEN_UP_MS: "0", AGENT_CENTER_FORGOTTEN_IDLE_MS: "0",
+    },
     stdout: "ignore",
     stderr: "ignore",
   })
@@ -301,6 +305,20 @@ describe("memory", () => {
       expect((await post(`/api/sessions/${WATCHER}/stopprocess`, { pid })).status).toBe(404)
       expect((await post(`/api/sessions/${ID}/stopprocess`, { pid: process.pid })).status).toBe(404)
       expect((await jsonOf(post(`/api/sessions/${ID}/stopprocess`, { pid }))).ok).toBe(true)
+      await Bun.sleep(500)
+      expect(() => process.kill(pid, 0)).toThrow()
+
+      // Another, idle since it started: forgotten, and "Stop them" stops it.
+      await Bun.spawn(["/bin/sh", "-c", `(sleep 120; echo ${ID}) > /dev/null 2>&1 &`]).exited
+      let forgotten: any = null
+      for (let i = 0; i < 40 && !forgotten; i++) {
+        await Bun.sleep(500)
+        const c = (await jsonOf(fetch(`${base()}/api/state`))).cards.find((c: any) => c.id === ID)
+        forgotten = c?.memory?.items.find((m: any) => m.isForgotten && m.pid !== pid)
+      }
+      expect(forgotten).toBeTruthy()
+      pid = forgotten.pid
+      expect((await jsonOf(post("/api/memory/stopforgotten"))).stopped).toBeGreaterThanOrEqual(1)
       await Bun.sleep(500)
       expect(() => process.kill(pid, 0)).toThrow()
     } finally {

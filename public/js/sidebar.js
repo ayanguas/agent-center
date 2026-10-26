@@ -83,16 +83,31 @@ const PRESSURE = { warning: "Mac short of memory", critical: "Mac out of memory"
 function SessionsMemory({ data }) {
   const ui = useContext(Ctx)
   const [isOpen, setOpen] = useState(false)
+  const [isSure, setSure] = useState(false) // "Stop them" asks once more
   const m = data.memory
   if (!m?.total) return null
   const heavy = data.cards.filter(c => c.memory?.total >= 100 * 1024 ** 2).sort((a, b) => b.memory.total - a.memory.total)
   const tone = m.pressure !== "normal" || heavy.some(c => c.memory.total >= MEMORY_WARN) ? "tone-run" : ""
+  // Commands left running and unused for a while (lib/memory.ts): all at once.
+  const forgotten = data.cards.flatMap(c => (c.memory?.items ?? []).filter(i => i.isForgotten).map(i => ({ ...i, session: c.title })))
+  const forgottenBytes = forgotten.reduce((sum, i) => sum + i.bytes, 0)
+  const stopForgotten = async () => {
+    if (!isSure) return (setSure(true), setTimeout(() => setSure(false), 4000))
+    setSure(false)
+    const res = await post("/api/memory/stopforgotten")
+    ui.toast(res.body.ok ? `Stopped ${res.body.stopped} of ${forgotten.length}` : (res.body.error ?? "Could not stop them"))
+  }
   return html`<div class="side-memory">
     <button class=${`side-uploads ${tone}`} aria-expanded=${isOpen} onClick=${() => setOpen(!isOpen)}
       title="Memory your sessions and what they started take on this Mac (Activity Monitor's Memory column). Click to see which">
       <${Icon} name="gauge" size=${14} /><span>Sessions</span>
       ${PRESSURE[m.pressure] && html`<span class="mem-pressure">${PRESSURE[m.pressure]}</span>`}
       <span class="n">${memText(m.total)}</span></button>
+    ${forgotten.length > 0 && html`<div class="mem-forgotten"
+      title=${`Up for hours and idle for over 30 min:\n${forgotten.map(i => `• ${i.label}${i.cwd ? ` · ${i.cwd}` : ""} · ${memText(i.bytes)} (${i.session})`).join("\n")}`}>
+      <span>${forgotten.length} left running, unused · ${memText(forgottenBytes)}</span>
+      <button class=${`link-btn ${isSure ? "sure" : ""}`} onClick=${stopForgotten}>${isSure ? "Sure? Stop them" : "Stop them"}</button>
+    </div>`}
     ${isOpen && html`<ul class="mem-list">
       ${heavy.map(c => html`<li key=${c.id}><button class=${c.memory.total >= MEMORY_WARN ? "warn" : ""} onClick=${() => ui.openReader(c.id)}
         title=${c.memory.items.filter(i => i.bytes >= 10 * 1024 ** 2).map(i => `• ${i.label}${i.cwd ? ` · ${i.cwd}` : ""} · ${memText(i.bytes)}`).join("\n")}>

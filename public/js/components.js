@@ -329,7 +329,10 @@ export function BackgroundBox({ card }) {
     const res = await post(`/api/sessions/${card.id}/stopprocess`, { pid: i.pid })
     ui.toast(res.body.ok ? `Stopping ${i.label}…` : (res.body.error ?? "Could not stop it"))
   }
-  const memCell = i => i && html`<span class=${`bg-mem ${i.bytes >= MEMORY_WARN ? "warn" : ""}`}>${memText(i.bytes)}</span>
+  const idleFor = i => (i.idleSince && ui.now - i.idleSince > 5 * 60_000 ? `idle ${ago(i.idleSince, ui.now)}` : "")
+  const memCell = i => i && html`${idleFor(i) && html`<span class=${`bg-idle ${i.isForgotten ? "forgotten" : ""}`}
+      title=${i.isForgotten ? "Up for hours and unused for a while: likely forgotten" : "No CPU used lately"}>${idleFor(i)}</span>`}
+    <span class=${`bg-mem ${i.bytes >= MEMORY_WARN ? "warn" : ""}`}>${memText(i.bytes)}</span>
     <button class="link-btn bg-stop" title=${`Stop it (and what it started)${i.cwd ? `: ${i.cwd}` : ""}`} onClick=${() => stopAt(i)}>Stop</button>`
   return html`<div class="bg-box">
     <div class="bg-head"><span class="dot run"></span>Running now<span class="count">${rows.length + others.length}</span>
@@ -367,7 +370,7 @@ export function MemoryChip({ card }) {
   if (!m || m.total < MEMORY_WARN) return null
   const lines = m.items
     .filter(i => i.bytes >= 10 * MB)
-    .map(i => `• ${i.label}${i.cwd ? ` · ${i.cwd}` : ""} · ${memText(i.bytes)}${i.kind === "session" ? "" : ` · ${ago(i.since, ui.now)}`}${i.isDetached ? " · left running" : ""}`)
+    .map(i => `• ${i.label}${i.cwd ? ` · ${i.cwd}` : ""} · ${memText(i.bytes)}${i.kind === "session" ? "" : ` · ${ago(i.since, ui.now)}`}${i.isDetached ? " · left running" : ""}${i.isForgotten ? " · unused" : ""}`)
   return html`<button class=${`tag mem-chip ${m.total >= MEMORY_HIGH ? "high" : ""}`}
     title=${`Memory on this Mac: ${memText(m.total)}\n${lines.join("\n")}\n\nClick to see it and stop what you do not need`}
     onClick=${e => (e.stopPropagation(), ui.openReader(card.id))}>

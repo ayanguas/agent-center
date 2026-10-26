@@ -12,7 +12,11 @@ import { HOME } from "./config"
 import { exec } from "./proc"
 import { killTree } from "./runner"
 
-const EVERY_MS = 20_000
+// How often it reads; and "forgotten": a command up this long, idle (no CPU)
+// this long. The tests set them shorter (they would wait hours).
+const EVERY_MS = Number(process.env.AGENT_CENTER_MEMORY_EVERY_MS ?? 20_000)
+const FORGOTTEN_UP_MS = Number(process.env.AGENT_CENTER_FORGOTTEN_UP_MS ?? 2 * 3600_000)
+const FORGOTTEN_IDLE_MS = Number(process.env.AGENT_CENTER_FORGOTTEN_IDLE_MS ?? 30 * 60_000)
 const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g
 const SHELLS = new Set(["zsh", "bash", "sh", "fish"])
 const WRAPPERS = new Set(["safe-chain", "env", "nohup", "caffeinate", "time", "exec"])
@@ -26,11 +30,22 @@ export type MemoryItem = {
   bytes: number
   since: number
   isDetached: boolean // left the session's process (the session may be asleep)
+  idleSince: number | null // since when it (with its children) has used no CPU
+  isForgotten: boolean // up for hours and idle for a while: likely left behind
 }
 export type SessionMemory = { total: number; items: MemoryItem[] }
 export type Pressure = "normal" | "warning" | "critical"
 
-type Row = { pid: number; ppid: number; since: number; command: string }
+type Row = { pid: number; ppid: number; since: number; cpu: number; command: string }
+
+// CPU time used so far, per item (by its first pid), and since when it has
+// not grown: a server nobody uses takes no CPU between two readings.
+const cpuSeen = new Map<number, { cpu: number; idleSince: number | null }>()
+
+// ps's TIME, "1:02:03.45" or "02:03.45" → seconds.
+function cpuOf(time: string) {
+  return time.split(":").reverse().reduce((sum, part, i) => sum + Number(part) * 60 ** i, 0) || 0
+}
 
 let latest: { at: number; bySession: Map<string, SessionMemory>; pressure: Pressure } = { at: 0, bySession: new Map(), pressure: "normal" }
 let running: Promise<void> | null = null
@@ -68,14 +83,14 @@ function readable(command: string) {
 async function scan(sessionIds: Set<string>) {
   const now = Date.now()
   const [ps, top, level] = await Promise.all([
-    exec(["/bin/ps", "-axww", "-o", "pid=,ppid=,etime=,command="], { timeoutMs: 5000 }),
+    exec(["/bin/ps", "-axww", "-o", "pid=,ppid=,etime=,time=,command="], { timeoutMs: 5000 }),
     exec(["/usr/bin/top", "-l", "1", "-stats", "pid,mem"], { timeoutMs: 8000 }),
     exec(["/usr/sbin/sysctl", "-n", "kern.memorystatus_vm_pressure_level"], { timeoutMs: 2000 }),
   ])
   const rows = new Map<number, Row>()
   for (const line of ps.stdout.split("\n")) {
-    const m = line.match(/^\s*(\d+)\s+(\d+)\s+(\S+)\s+(.*)$/)
-    if (m) rows.set(Number(m[1]), { pid: Number(m[1]), ppid: Number(m[2]), since: sinceOf(m[3]!, now), command: m[4]! })
+    const m = line.match(/^\s*(\d+)\s+(\d+)\s+(\S+)\s+(\S+)\s+(.*)$/)
+    if (m) rows.set(Number(m[1]), { pid: Number(m[1]), ppid: Number(m[2]), since: sinceOf(m[3]!, now), cpu: cpuOf(m[4]!), command: m[5]! })
   }
   const mem = new Map<number, number>()
   for (const line of top.stdout.split("\n")) {
@@ -94,9 +109,17 @@ async function scan(sessionIds: Set<string>) {
     pids.forEach(p => claimed.add(p))
     const named = pids.map(p => rows.get(p)!).find(r => r && !SHELLS.has(base(r.command.split(/\s+/)[0] ?? ""))) ?? rows.get(pid)!
     const label = readable(named.command)
+    const realKind = kind === "command" && /\bmcp\b|mcp-server|modelcontextprotocol/i.test(named.command) ? "mcp" : kind
+    // Idle: its CPU time (with its children's) has not grown since last time.
+    const cpu = pids.reduce((sum, p) => sum + (rows.get(p)?.cpu ?? 0), 0)
+    const seen = cpuSeen.get(pid)
+    const idleSince = seen && cpu - seen.cpu < 0.05 ? (seen.idleSince ?? now) : null
+    cpuSeen.set(pid, { cpu, idleSince })
+    const since = rows.get(pid)!.since
     return {
-      pid, kind: kind === "command" && /\bmcp\b|mcp-server|modelcontextprotocol/i.test(named.command) ? "mcp" : kind,
-      label, command: rows.get(pid)!.command.slice(0, 3000), cwd: null, bytes: pids.reduce((sum, p) => sum + (mem.get(p) ?? 0), 0), since: rows.get(pid)!.since, isDetached,
+      pid, kind: realKind, label, command: rows.get(pid)!.command.slice(0, 3000), cwd: null,
+      bytes: pids.reduce((sum, p) => sum + (mem.get(p) ?? 0), 0), since, isDetached, idleSince,
+      isForgotten: realKind === "command" && now - since > FORGOTTEN_UP_MS && idleSince !== null && now - idleSince > FORGOTTEN_IDLE_MS,
     }
   }
 
@@ -113,7 +136,7 @@ async function scan(sessionIds: Set<string>) {
     const id = r.command.match(/--(?:resume|session-id)[= ]([0-9a-f-]{36})/)?.[1]
     if (!id) continue
     claimed.add(r.pid)
-    add(id, { pid: r.pid, kind: "session", label: "Claude (the session)", command: "", cwd: null, bytes: mem.get(r.pid) ?? 0, since: r.since, isDetached: false })
+    add(id, { pid: r.pid, kind: "session", label: "Claude (the session)", command: "", cwd: null, bytes: mem.get(r.pid) ?? 0, since: r.since, isDetached: false, idleSince: null, isForgotten: false })
     for (const child of kids.get(r.pid) ?? []) add(id, item(child, "command", false))
   }
   // What outlived it: the topmost process naming a known session. The
@@ -141,6 +164,8 @@ async function scan(sessionIds: Set<string>) {
   }
   for (const s of bySession.values()) s.items.sort((a, b) => b.bytes - a.bytes)
   const pressure: Pressure = level.stdout.trim() === "4" ? "critical" : level.stdout.trim() === "2" ? "warning" : "normal"
+  const live = new Set([...bySession.values()].flatMap(s => s.items.map(i => i.pid)))
+  for (const pid of cpuSeen.keys()) if (!live.has(pid)) cpuSeen.delete(pid)
   latest = { at: now, bySession, pressure }
 }
 
@@ -176,4 +201,13 @@ export async function stopProcess(sessionIds: string[], pid: number) {
   if (now.stdout.trim().slice(0, 3000) !== found.command.trim()) return false
   await killTree(pid)
   return true
+}
+
+// Every command left running and forgotten (see isForgotten), stopped at
+// once; each is checked again before it goes. Answers how many went.
+export async function stopForgotten() {
+  let stopped = 0
+  for (const [id, s] of latest.bySession)
+    for (const i of s.items) if (i.isForgotten && (await stopProcess([id], i.pid))) stopped++
+  return stopped
 }
