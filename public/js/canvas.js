@@ -11,7 +11,7 @@ import { Ctx } from "./ctx.js"
 import { Icon } from "./icons.js"
 import { RunChip } from "./run.js"
 import { hue, isTyping, keep, load, post } from "./util.js"
-import { origins } from "./motion.js"
+import { origins, quietly } from "./motion.js"
 
 const MAX_ZOOM = 1.5 // 150 % of the cards' real size
 const MIN_ZOOM = 0.4 // zoomed out: more room around, cards at 40 %
@@ -216,7 +216,7 @@ function Zone({ zone, scale, bounds, onChange, onRemove, onMoveWith, isNew = fal
       onMoveWith(zone, dx, dy, true)
       onChange({ ...zone, x: snap(zone.x + dx), y: snap(zone.y + dy) })
     },
-    onClick: () => zone.collapsed && onChange({ ...zone, collapsed: false }), // a click on a folder unfolds it
+    onClick: () => zone.collapsed && fold(false), // a click on a folder unfolds it
   })
   // A zone stays on the visible canvas, above "Done".
   const within = (z, dx, dy) => [
@@ -243,6 +243,7 @@ function Zone({ zone, scale, bounds, onChange, onRemove, onMoveWith, isNew = fal
   // (below) plays it backwards.
   const closing = useRef(null)
   const fold = isFolded => {
+    quietly(members.map(c => c.id))
     if (!isFolded || isCalm()) return onChange({ ...zone, collapsed: isFolded })
     const flights = members
       .map(c => document.querySelector(`.ccard[data-id="${c.id}"]`))
@@ -263,7 +264,7 @@ function Zone({ zone, scale, bounds, onChange, onRemove, onMoveWith, isNew = fal
     closing.current = null
     if (was === !!zone.collapsed || isCalm() || !ref.current) return
     if (zone.collapsed) {
-      ref.current.animate([{ transform: "scale(0.94)", opacity: 0.4 }, { transform: "none", opacity: 1 }], { duration: 220, easing: FOLD_EASE })
+      ref.current.animate([{ transform: "scale(0.96)" }, { transform: "none" }], { duration: 220, easing: FOLD_EASE })
       return
     }
     ref.current.animate([{ clipPath: folderClip(zone) }, { clipPath: "inset(0 round 14px)" }], { duration: 300, easing: FOLD_EASE })
@@ -380,7 +381,10 @@ export function Canvas({ cards, zones: savedZones, notes: savedNotes, isDrawingZ
   const [box, setBox] = useState(null) // the selection box being drawn, in canvas units
   const isSpace = useRef(false)
   const dragRef = useRef(null) // cards riding along with a zone
-  useEffect(() => setZones(savedZones), [JSON.stringify(savedZones)])
+  // While a change of zones is being saved, a snapshot made before it would
+  // put the old zones back for a moment: only one after it counts.
+  const zonesSaving = useRef(0)
+  useEffect(() => void (zonesSaving.current || setZones(savedZones)), [JSON.stringify(savedZones)])
   useLayoutEffect(() => {
     const r = wrap.current.getBoundingClientRect()
     setView({ w: r.width, h: r.height })
@@ -582,7 +586,8 @@ export function Canvas({ cards, zones: savedZones, notes: savedNotes, isDrawingZ
 
   const saveZones = list => {
     setZones(list)
-    post("/api/canvas/zones", { zones: list })
+    zonesSaving.current++
+    post("/api/canvas/zones", { zones: list }).finally(() => zonesSaving.current--)
   }
 
   // ---- drawing a new zone ----
@@ -737,6 +742,7 @@ export function Canvas({ cards, zones: savedZones, notes: savedNotes, isDrawingZ
       // In, once the card has shrunk into the folder (which gives a little
       // bump as it lands): placed earlier, it would vanish mid-flight.
       const putIn = () => {
+        quietly(moving.map(c => c.id))
         el.style.transform = ""
         groupReset(key)
         const taken = membersOf(folder).map(c => ({ ...pos[c.id], w: CARD_W, h: heightOf(c.id) }))

@@ -16,6 +16,13 @@ const DROP_GAP_MS = 260 // how long the others wait while an archived card falls
 // Where a trip starts when it is not where the card last rested: a card
 // dropped by hand flies on from the drop point. Set just before the change.
 export const origins = new Map()
+// Cards that appear or leave with an animation of their own (a canvas zone
+// folding or unfolding, a card dropped into a folder): left alone, once.
+export const quiet = new Set()
+export function quietly(ids) {
+  for (const id of ids) quiet.add(id)
+  setTimeout(() => ids.forEach(id => quiet.delete(id)), 1000) // in case no render saw them
+}
 const reduced = () => matchMedia("(prefers-reduced-motion: reduce)").matches
 
 // Where an element sits: its group and its index among that group's items.
@@ -78,6 +85,7 @@ export function useFlip(ref, scope, whereTo) {
       for (const [id, el] of now) {
         const old = prev.current.get(id)
         if (!old) {
+          if (quiet.delete(id)) continue
           unitOf(el).animate(
             [{ opacity: 0, transform: "translateY(6px) scale(0.98)" }, { opacity: 1, transform: "none" }],
             { duration: 260, easing: EASE },
@@ -126,7 +134,7 @@ export function useFlip(ref, scope, whereTo) {
       }
 
       for (const [id, old] of prev.current) {
-        if (now.has(id) || !old.unit) continue
+        if (now.has(id) || !old.unit || quiet.delete(id)) continue
         const ghost = copyAt(old.unit, old.unitRect, old.k)
         const goesTo = whereTo(id)
         // Archived: a small lift, then it drops out of the view, tilting as it falls.
