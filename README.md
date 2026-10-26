@@ -25,6 +25,8 @@ sessions through a small Claude Code mod, and keeps its own state in a folder of
 - **Code blocks** in a conversation wrap their lines and have a Copy button; with **Run
   commands** on (Setup), a shell block also has Run: it runs on your Mac in the session's
   folder, with its output and a Stop button under the block, as in Claude desktop.
+- **Next up** (`F`, or the button with the count): opens what waits for you next, its reply box
+  ready: approvals, then questions (the longest waiting first), then what is new to review.
 - **Read and reply from the board.** Open a card to read the conversation and reply as if you
   typed it in Claude. Messages wait 5 s (and while a turn runs) so you can undo them. Attach
   images, PDFs and any other file; dictate with Whisper on your Mac.
@@ -45,13 +47,18 @@ sessions through a small Claude Code mod, and keeps its own state in a folder of
 - **Catch me up** (`D`): one line per session about what happened since you last looked and what
   is yours to do, written by Claude in a separate call that does not touch your sessions.
 - **Plan limits** in the sidebar: how much of your 5-hour and weekly windows is used, when each
-  resets, and whether you are ahead of the time gone by.
+  resets, whether you are ahead of the time gone by, where you get at this pace ("full at
+  14:20"), and which sessions used most of the last 5 hours.
 - **Memory** per session: what its process and everything it started take on your Mac, dev
   servers left running after their turn (or after the session went to sleep) included. A card
   shows it from 1 GB (red from 3 GB), the conversation lists each process with Stop, and the
-  sidebar sums your sessions and warns when the Mac runs short of memory.
+  sidebar sums your sessions, warns when the Mac runs short of memory, and finds the commands
+  left running for hours that nobody uses, to stop them all with one click.
+- **Overlaps**: a card warns when another open session edited the same files in the last hours,
+  or works in the same folder right now.
 - **Context and cost** per session, background work running now, the task list of the current
-  turn, unread marks, urgency colours, macOS notifications and a Dock badge when a session asks, and
+  turn, unread marks, urgency colours, macOS notifications and a Dock badge when a session asks, a bell
+  on a card to hear once when that session finishes, and
   an optional chime when a session finishes or asks (heard while you look at the board too).
 - **Search** every conversation you ever had (`/` or `⌘K`), archived ones included, in a palette
   as in Claude desktop: tabs, the words marked in the title and a quote, the keyboard to choose.
@@ -193,6 +200,7 @@ Catch me up and new sessions run Claude Code itself (`claude -p`), with your acc
 | `E` | Mark as done; on a done card, reopen |
 | `U` | Mark to review (a Pending card) |
 | `S` | Stop the running turn (a Working card) |
+| `F` | Next up: what waits for you |
 | `Z` | Undo |
 | `/`, `⌘K` | Search |
 | `1` `2` `3` | Inbox · Board · Canvas |
