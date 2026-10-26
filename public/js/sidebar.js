@@ -76,7 +76,7 @@ export function Sidebar({ data, repoFilter, view, connected, notify, sound }) {
 
 // ---------- what the sessions take in memory ----------
 
-const PRESSURE = { warning: "Mac short of memory", critical: "Mac out of memory" }
+const PRESSURE = { warning: "Memory low", critical: "Out of memory" } // the Mac's, as macOS rates it
 
 // The sessions together (their processes and what they started); open, the
 // ones that take the most, each a click from its conversation.
