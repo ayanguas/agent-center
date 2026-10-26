@@ -3,6 +3,7 @@
 
 import { stat } from "node:fs/promises"
 import { setNotes, setZones } from "../lib/board"
+import { requestSettings } from "../lib/bridge"
 import { activate, newInClient, pickFolder } from "../lib/client"
 import { EFFORTS, MODES } from "../lib/config"
 import { readDesktop } from "../lib/desktop"
@@ -26,7 +27,11 @@ const isFolder = (path: string) => stat(path).then(st => st.isDirectory(), () =>
 // A new session: sent, its first turn runs headless here with the mode, model
 // and effort picked in the dialog, and it moves into the client once that
 // turn ends (so it shows up there and can take messages from here); not
-// sent, it opens in the client with the prompt written.
+// sent, it opens in the client with the prompt written. The client imports
+// it in Manual when it ran in Auto (or Bypass): those are chosen in the
+// client. So the mode is asked again through the session's mod, once the
+// headless run is gone; the client asks the person to approve it.
+const KEPT_ON_IMPORT = new Set(["default", "acceptEdits", "plan"])
 async function newSession(body: Record<string, unknown>) {
   const folder = String(body.folder ?? "")
   if (!folder) return json({ error: "missing folder" }, 400)
@@ -38,7 +43,10 @@ async function newSession(body: Record<string, unknown>) {
   if (/^claude-[\w.-]+$/.test(String(body.model ?? ""))) extra.push("--model", String(body.model))
   if (EFFORTS.includes(String(body.effort))) extra.push("--effort", String(body.effort))
   try {
-    const id = await launch(folder, prompt, done => void activate(done), extra, mode)
+    const id = await launch(folder, prompt, async done => {
+      if (!KEPT_ON_IMPORT.has(mode)) await requestSettings(done, { mode }).catch(() => {})
+      void activate(done)
+    }, extra, mode)
     refreshSoon()
     return json({ ok: true, id })
   } catch (err) {

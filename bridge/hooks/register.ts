@@ -28,7 +28,7 @@ import type { EngineInterface, Register } from 'claude-code'
 
 const POLL_MS = 2000
 const KEEP_ACKS = 100
-const VERSION = 7
+const VERSION = 8
 const ANSWER_POLL_MS = 1000
 
 type Message = { id: string; text: string; notBefore?: number }
@@ -96,8 +96,17 @@ async function readAcks($: EngineInterface, b: Bridge) {
 // goes through the desktop app's own tool, which shows its approval card for
 // a mode that asks less; model and effort run as /model and /effort, as if
 // typed. Each result is "ok" or the reason it failed.
-type SettingsRequest = { id: string; mode?: string; model?: string; effort?: string }
+type SettingsRequest = { id: string; mode?: string; model?: string; effort?: string; at?: number }
+// A mode change that could not reach the client is asked again, every
+// RETRY_MS, for SETTINGS_PATIENCE_MS: right after a new session is imported
+// the client's tools are not connected yet, and a session closed while its
+// approval card waited takes the card with it (it shows again when reopened).
+const RETRYABLE = /no connected MCP tool|stream closed before response/
+const RETRY_MS = 15_000
+const SETTINGS_PATIENCE_MS = 30 * 60_000
+let retryAt = 0
 async function applySettings($: EngineInterface, b: Bridge) {
+  if ((await $.clock.now()) < retryAt) return
   let req: SettingsRequest | null = null
   try {
     req = JSON.parse(await $.fs.read(`${b.base}/settings/${b.id}.json`))
@@ -106,6 +115,7 @@ async function applySettings($: EngineInterface, b: Bridge) {
   }
   if (!req?.id || req.id === b.settings?.id) return
   const results: Record<string, string> = {}
+  const before = b.settings
   b.settings = { id: req.id, results }
   await writeAcks($, b) // claimed first: never applied twice
   const fail = (err: unknown) => (err instanceof Error ? err.message : String(err)).slice(0, 300)
@@ -114,6 +124,13 @@ async function applySettings($: EngineInterface, b: Bridge) {
       const r = await $.mcp.call("ccd_session_mgmt", "set_session_permission_mode", { session_id: "self", mode: req.mode })
       results.mode = r.isError ? fail(JSON.stringify(r.content ?? r)) : "ok"
     } catch (err) {
+      const now = await $.clock.now()
+      if (RETRYABLE.test(fail(err)) && now - (req.at ?? 0) < SETTINGS_PATIENCE_MS) {
+        retryAt = now + RETRY_MS
+        b.settings = before // unclaimed: asked again later
+        await writeAcks($, b)
+        return
+      }
       results.mode = fail(err)
     }
   }
