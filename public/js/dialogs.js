@@ -137,6 +137,7 @@ const SHORTCUTS = [
   ["Search", [["/"], ["⌘", "K"]]],
   ["Inbox · Board · Canvas", [["1"], ["2"], ["3"]]],
   ["Lanes per repo", [["G"]]],
+  ["Next up: what waits for you", [["F"]]],
   ["New session", [["N"]]],
   ["Catch me up", [["D"]]],
   ["Stop the running turn", [["S"]]],

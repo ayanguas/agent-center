@@ -49,6 +49,16 @@ function App() {
   const [notify, setNotifyRaw] = useState(() => (permission() === "denied" ? "blocked" : load("notify", "off")))
   // A chime when a session ends its turn or asks you something: "on" or "off".
   const [sound, setSoundRaw] = useState(() => load("sound", "off"))
+  // Sessions you asked to hear about once (the bell on a card): a chime, a
+  // note and, in another window, a notification when the turn ends or asks.
+  const [watched, setWatchedRaw] = useState(() => new Set(load("watched", [])))
+  const setWatched = next => (setWatchedRaw(next), keep("watched", [...next]))
+  const toggleWatch = card => {
+    const next = new Set(watched)
+    next.has(card.id) ? next.delete(card.id) : next.add(card.id)
+    setWatched(next)
+    toast(next.has(card.id) ? `You will hear when “${card.title}” finishes or asks you` : "No more notice for it")
+  }
   // First run, or a required step missing (the hook, the bridge mod): the
   // setup opens by itself, until closed once.
   useEffect(() => {
@@ -144,6 +154,20 @@ function App() {
       if (asking.some(c => !before.has(c.id))) chime("ask")
       else if ([...wasWorking].some(id => !working.current.has(id) && data.cards.some(c => c.id === id && c.column !== "archived"))) chime("done")
     }
+    // A watched session that ends its turn or starts asking: told once, even
+    // with the sound off, then no longer watched.
+    if (before && wasWorking && watched.size) {
+      const told = data.cards.filter(c => watched.has(c.id) && ((wasWorking.has(c.id) && c.column !== "working") || (c.column === "asking" && !before.has(c.id))))
+      if (told.length) {
+        if (sound !== "on") chime(told.some(c => c.column === "asking") ? "ask" : "done")
+        for (const c of told) {
+          const what = c.column === "asking" ? (c.state === "permission" ? "needs your approval" : "asks you something") : "finished"
+          toast(`“${c.title}” ${what}`)
+          if (notify === "on" && permission() === "granted" && !document.hasFocus()) showNotice(c.title, what[0].toUpperCase() + what.slice(1), c.id)
+        }
+        setWatched(new Set([...watched].filter(id => !told.some(c => c.id === id))))
+      }
+    }
     if (!before || notify !== "on" || permission() !== "granted" || document.hasFocus()) return
     for (const c of asking) {
       if (before.has(c.id)) continue
@@ -233,6 +257,19 @@ function App() {
   useEffect(() => {
     if (data && repoFilter && !data.repos.some(r => r.root === repoFilter)) setRepoFilter(null)
   }, [data])
+
+  // "Next up" (F): what waits for you, in the order to see it: approvals,
+  // then questions (the longest waiting first), then what is new to review
+  // (the oldest first). Each press opens the next one, its reply box ready.
+  const waiting = useMemo(() => {
+    const since = c => c.waitingSince ?? c.lastActivity ?? 0
+    const asking = cards.filter(c => c.column === "asking").sort((a, b) => since(a) - since(b))
+    return [
+      ...asking.filter(c => c.state === "permission"),
+      ...asking.filter(c => c.state !== "permission"),
+      ...cards.filter(c => c.column === "review").sort((a, b) => (a.lastActivity ?? 0) - (b.lastActivity ?? 0)),
+    ]
+  }, [cards])
 
   const order = useMemo(
     () => walkOrder(view, cards, showDone, groupBy, data?.repos ?? []),
@@ -391,6 +428,16 @@ function App() {
       setTimeout(() => composerFocus.current?.focus(), 120)
   }, [])
 
+  // Opens what waits for you after the one open now, its reply box ready.
+  const nextUp = () => {
+    if (!waiting.length) return toast("Nothing waits for you")
+    const i = waiting.findIndex(c => c.id === reader?.id)
+    if (i !== -1 && waiting.length === 1) return toast("Nothing else waits for you")
+    const next = waiting[(i + 1) % waiting.length]
+    openReader(next.id)
+    setTimeout(() => composerFocus.current?.focus(), 150)
+  }
+
   // While a conversation is open, what arrives in it counts as seen.
   useEffect(() => {
     const card = reader && data?.cards.find(c => c.id === reader.id)
@@ -450,10 +497,10 @@ function App() {
   // The handler is added once and reads the newest state from a ref, so two
   // keys pressed between renders both see what the first one did.
   const latest = useRef({})
-  latest.current = { dialog, isSearching, parkMenu, reader, selected, cards, order, act, launch, openReader }
+  latest.current = { dialog, isSearching, parkMenu, reader, selected, cards, order, act, launch, openReader, nextUp }
   useEffect(() => {
     const onKey = e => {
-      const { dialog, isSearching, parkMenu, reader, selected, cards, order, act, launch, openReader } = latest.current
+      const { dialog, isSearching, parkMenu, reader, selected, cards, order, act, launch, openReader, nextUp } = latest.current
       if (dialog || isSearching) return // the palette handles its own keys
       const typing = isTyping(e.target)
       const cmdK = (e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k"
@@ -526,6 +573,7 @@ function App() {
         case "2": return setView("board")
         case "3": return setView("canvas")
         case "n": e.preventDefault(); return setDialog("new")
+        case "f": e.preventDefault(); return nextUp()
         case "d": e.preventDefault(); return setDialog("digest")
         case "s": if (card?.column === "working") stopSession(card); return
         case "u": if (card?.column === "pending") act(card, "unseen"); return
@@ -577,6 +625,8 @@ function App() {
     toggleNotify,
     toggleSound,
     registerComposer: fn => (composerFocus.current = fn),
+    watched,
+    toggleWatch,
   }
   const readerCard = shown && data?.cards.find(c => c.id === shown.id)
   const readerResult = shown && opened?.id === shown.id ? opened : null
@@ -608,6 +658,9 @@ function App() {
             onClick=${() => post("/api/canvas/notes", { notes: [...(data?.notes ?? []), newNote(data?.notes ?? [])] })}>
             <${Icon} name="plus" size=${14} /><span class="lbl">Note</span></button>`}
           ${view !== "canvas" && html`<button class=${`btn ${showDone ? "on" : ""}`} data-fly="done" onClick=${() => setShowDone(!showDone)} title="Show done sessions">Done</button>`}
+          <button class=${`btn next-up ${waiting.length ? "has" : ""}`} onClick=${nextUp}
+            title=${waiting.length ? `Open what waits for you next: ${waiting.length} (approvals, questions, then what is new) · F` : "Nothing waits for you · F"}>
+            Next up${waiting.length > 0 && html`<span class="n">${waiting.length}</span>`}<${Kbd}>F<//></button>
           <button class="btn primary only-narrow" onClick=${() => setDialog("new")} title="New session (N)"><${Icon} name="plus" size=${15} /></button>
         </header>
         <${Offline} lostAt=${lostAt} hasData=${!!data} />

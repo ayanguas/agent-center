@@ -246,6 +246,9 @@ export function Actions({ card, compact = false }) {
     <button class=${`icon-btn ${card.pinned ? "on" : ""}`} title=${card.pinned ? "Unpin (P)" : "Pin (P)"}
       onClick=${stop(() => ui.act(card, card.pinned ? "unpin" : "pin"))}>
       <${Icon} name="star" size=${15} /></button>
+    ${card.column !== "done" && html`<button class=${`icon-btn ${ui.watched?.has(card.id) ? "on" : ""}`}
+      title=${ui.watched?.has(card.id) ? "You will hear when it finishes or asks you: click to stop" : "Tell me when it finishes or asks me something"}
+      onClick=${stop(() => ui.toggleWatch(card))}><${Icon} name="bell" size=${15} /></button>`}
     <button class=${`icon-btn ${card.run ? "on" : ""}`} title="Run: start this session's project" onClick=${stop(() => ui.openRun(card))}>
       <${Icon} name="play" size=${14} /></button>
     ${card.column === "pending" &&
