@@ -151,6 +151,21 @@ function CanvasCard({ card, at, scale, onDropped, z, isPicked = false, onPick, g
   </article>`
 }
 
+// Folding and unfolding a zone, and a card dropped on a folder, move only
+// transform and opacity, with the board's ease-out (motion.js); nothing
+// moves with reduced motion.
+const FOLD_EASE = "cubic-bezier(0.22, 1, 0.36, 1)"
+const isCalm = () => matchMedia("(prefers-reduced-motion: reduce)").matches
+const FOLDER_H = 96 // about a folder tile's height
+const folderClip = z => `inset(0 ${Math.max(0, z.w - CARD_W)}px ${Math.max(0, z.h - FOLDER_H)}px 0 round 14px)`
+
+// The way from a card on the canvas to the middle of its zone's folder.
+function towardFolder(el, zone) {
+  const x = parseFloat(el.style.left)
+  const y = parseFloat(el.style.top)
+  return { dx: zone.x - x, dy: zone.y + FOLDER_H / 2 - (y + el.offsetHeight / 2) }
+}
+
 // A folded zone's summary: what of its sessions waits for you, works, is new.
 function folderSummary(cards) {
   const count = test => cards.filter(test).length
@@ -223,7 +238,43 @@ function Zone({ zone, scale, bounds, onChange, onRemove, onMoveWith, isNew = fal
       onChange({ ...zone, w: Math.max(160, Math.floor(w / GRID) * GRID), h: Math.max(120, Math.floor(h / GRID) * GRID) })
     },
   })
-  const fold = isFolded => onChange({ ...zone, collapsed: isFolded })
+  // Folding: the cards fly into the folder, one after another, and the zone
+  // closes up to its size; the change is saved once they are in. Unfolding
+  // (below) plays it backwards.
+  const closing = useRef(null)
+  const fold = isFolded => {
+    if (!isFolded || isCalm()) return onChange({ ...zone, collapsed: isFolded })
+    const flights = members
+      .map(c => document.querySelector(`.ccard[data-id="${c.id}"]`))
+      .filter(Boolean)
+      .map((el, i) => {
+        const { dx, dy } = towardFolder(el, zone)
+        return el.animate([{ transform: "none", opacity: 1 }, { transform: `translate(${dx}px, ${dy}px) scale(0.35)`, opacity: 0 }],
+          { duration: 240, delay: i * 18, easing: FOLD_EASE, fill: "forwards" })
+      })
+    closing.current = ref.current.animate([{ clipPath: "inset(0 round 14px)" }, { clipPath: folderClip(zone) }], { duration: 260, easing: FOLD_EASE, fill: "forwards" })
+    Promise.all([closing.current, ...flights].map(a => a.finished)).catch(() => {}).finally(() => onChange({ ...zone, collapsed: true }))
+  }
+  const wasFolded = useRef(!!zone.collapsed)
+  useLayoutEffect(() => {
+    const was = wasFolded.current
+    wasFolded.current = !!zone.collapsed
+    closing.current?.cancel()
+    closing.current = null
+    if (was === !!zone.collapsed || isCalm() || !ref.current) return
+    if (zone.collapsed) {
+      ref.current.animate([{ transform: "scale(0.94)", opacity: 0.4 }, { transform: "none", opacity: 1 }], { duration: 220, easing: FOLD_EASE })
+      return
+    }
+    ref.current.animate([{ clipPath: folderClip(zone) }, { clipPath: "inset(0 round 14px)" }], { duration: 300, easing: FOLD_EASE })
+    members.forEach((c, i) => {
+      const el = document.querySelector(`.ccard[data-id="${c.id}"]`)
+      if (!el) return
+      const { dx, dy } = towardFolder(el, zone)
+      el.animate([{ transform: `translate(${dx}px, ${dy}px) scale(0.35)`, opacity: 0 }, { transform: "none", opacity: 1 }],
+        { duration: 320, delay: 40 + i * 22, easing: FOLD_EASE, fill: "backwards" })
+    })
+  }, [zone.collapsed])
   if (zone.collapsed)
     return html`<section ref=${ref} class="zone folder" data-zone=${zone.id} style=${`left:${zone.x}px;top:${zone.y}px;width:${CARD_W}px;--hue:${hue(zone.name)}`}
       onPointerDown=${startDrag} title="Click to unfold · drag to move it · drop a card on it to add it">
@@ -683,20 +734,31 @@ export function Canvas({ cards, zones: savedZones, notes: savedNotes, isDrawingZ
     const folder = folderEl && zones.find(z => z.id === folderEl.dataset.zone)
     if (folder) {
       const moving = [card, ...othersOf(key).filter(k => k.startsWith("c:")).map(cardOf).filter(Boolean)]
-      el.style.transform = ""
-      groupReset(key)
-      const taken = membersOf(folder).map(c => ({ ...pos[c.id], w: CARD_W, h: heightOf(c.id) }))
-      let zone = folder
-      for (const c of moving) {
-        follow(c, 0, 0, true)
-        const spot = placeIn(zone, taken, heightOf(c.id))
-        zone = spot.zone
-        taken.push({ ...spot.at, w: CARD_W, h: heightOf(c.id) })
-        place(c, spot.at)
-        if (c.column === "done") ui.act(c, "undone")
+      // In, once the card has shrunk into the folder (which gives a little
+      // bump as it lands): placed earlier, it would vanish mid-flight.
+      const putIn = () => {
+        el.style.transform = ""
+        groupReset(key)
+        const taken = membersOf(folder).map(c => ({ ...pos[c.id], w: CARD_W, h: heightOf(c.id) }))
+        let zone = folder
+        for (const c of moving) {
+          follow(c, 0, 0, true)
+          const spot = placeIn(zone, taken, heightOf(c.id))
+          zone = spot.zone
+          taken.push({ ...spot.at, w: CARD_W, h: heightOf(c.id) })
+          place(c, spot.at)
+          if (c.column === "done") ui.act(c, "undone")
+        }
+        if (zone !== folder) saveZones(zones.map(z => (z.id === zone.id ? zone : z)))
+        setPicked(new Set())
       }
-      if (zone !== folder) saveZones(zones.map(z => (z.id === zone.id ? zone : z)))
-      setPicked(new Set())
+      if (isCalm()) putIn()
+      else {
+        const { dx, dy } = towardFolder(el, folder)
+        el.animate([{ transform: el.style.transform || "none", opacity: 1 }, { transform: `translate(${dx}px, ${dy}px) scale(0.3)`, opacity: 0 }],
+          { duration: 200, easing: FOLD_EASE, fill: "forwards" }).finished.catch(() => {}).finally(putIn)
+        folderEl.animate([{ transform: "none" }, { transform: "scale(1.05)", offset: 0.6 }, { transform: "none" }], { duration: 300, delay: 120, easing: FOLD_EASE })
+      }
       return ui.toast(`${moving.length === 1 ? "Added" : `${moving.length} added`} to ${folder.name}`)
     }
     const next = {
