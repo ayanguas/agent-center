@@ -78,17 +78,29 @@ export async function listVoices() {
   return voices
 }
 
-// The voice asked for, if this Mac has it; else the best Spanish one
-// (enhanced first), else the system's own (null).
-async function voiceOf(name: unknown) {
-  const all = await listVoices()
-  const asked = all.find(v => v.name === name)
-  if (asked) return asked
-  const spanish = all.filter(v => v.locale === "es_ES")
-  return spanish.find(v => /premium|enhanced|mejorada/i.test(v.name)) ?? spanish.find(v => v.name === "Mónica") ?? spanish[0] ?? null
+// "system", the default: the voice chosen in System Settings → Accessibility
+// → Read & Speak (System voice, after System speech language), which `say`
+// uses when it is given none. Siri's voices are only reachable this way
+// (`say -v ?` does not list them).
+export const SYSTEM = "system"
+const SPANISH = /[áéíóúñ¿¡]|\b(el|la|los|las|que|de|del|y|en|por|para|con|una?|es)\b/i
+let systemSpeaksSpanish: boolean | null = null
+
+// The language of the system voice is not written anywhere `say` reads:
+// the words to be said tell it, else the Mac's preferred languages.
+async function languageOf(voice: Voice, text: string) {
+  if (voice.name !== SYSTEM) return voice.locale.startsWith("es") ? "es" : "en"
+  if (SPANISH.test(text)) return "es"
+  systemSpeaksSpanish ??= /"?es[-_"]/.test((await exec(["/usr/bin/defaults", "read", "-g", "AppleLanguages"], { timeoutMs: 3000 })).stdout)
+  return systemSpeaksSpanish ? "es" : "en"
 }
 
-export const defaultVoice = async () => (await voiceOf(null))?.name ?? null
+// The voice asked for, if this Mac has it; else the system's.
+async function voiceOf(name: unknown): Promise<Voice> {
+  return (await listVoices()).find(v => v.name === name) ?? { name: SYSTEM, locale: "" }
+}
+
+export const defaultVoice = () => SYSTEM
 
 // What it says when the turn has no recap of its own.
 const PLAIN = {
@@ -104,11 +116,11 @@ let queue = Promise.resolve()
 let waiting = 0
 const spoken = new Set<string>()
 
-function say(text: string, voice: Voice | null, rate: unknown) {
+function say(text: string, voice: Voice, rate: unknown) {
   if (waiting >= MAX_WAITING) return false
   if (process.env.AGENT_CENTER_DRY_RUN) return true // the tests: silent
   const r = Number(rate)
-  const args = [...(voice ? ["-v", voice.name] : []), ...(Number.isFinite(r) && r > 0 ? ["-r", String(Math.round(Math.min(RATES.max, Math.max(RATES.min, r))))] : [])]
+  const args = [...(voice.name !== SYSTEM ? ["-v", voice.name] : []), ...(Number.isFinite(r) && r > 0 ? ["-r", String(Math.round(Math.min(RATES.max, Math.max(RATES.min, r))))] : [])]
   waiting++
   // The text goes in on stdin: one starting with "-" is never an option.
   queue = queue.then(() => exec(["/usr/bin/say", ...args, "-f", "-"], { input: text, timeoutMs: 120_000 })).then(() => void waiting--)
@@ -126,8 +138,8 @@ export async function speakTurn(id: string, title: string, kind: Kind, options: 
   spoken.add(key)
   if (spoken.size > 500) spoken.delete(spoken.values().next().value!)
   const voice = await voiceOf(options.voice)
-  const lang = voice?.locale.startsWith("es") ? "es" : "en"
   const name = spokenForm(title).replace(/[.!?]+$/, "")
+  const lang = await languageOf(voice, `${name} ${last.recap?.text ?? ""}`)
   const text = last.recap ? `${name}. ${spokenForm(last.recap.text)}${last.recap.ask ? ` ${spokenForm(last.recap.ask)}` : ""}` : `${name} ${PLAIN[lang][kind]}`
   return say(text, voice, options.rate) ? text : null
 }
@@ -135,5 +147,5 @@ export async function speakTurn(id: string, title: string, kind: Kind, options: 
 // The setting's "Try it": a sample in the chosen voice.
 export async function speakSample(options: { voice?: unknown; rate?: unknown }) {
   const voice = await voiceOf(options.voice)
-  say(SAMPLE[voice?.locale.startsWith("es") ? "es" : "en"], voice, options.rate)
+  say(SAMPLE[await languageOf(voice, "")], voice, options.rate)
 }

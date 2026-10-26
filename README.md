@@ -63,7 +63,8 @@ sessions through a small Claude Code mod, and keeps its own state in a folder of
   an optional chime when a session finishes or asks (heard while you look at the board too).
 - **Read aloud** (optional): when a session ends its turn, the Mac says what it did, with `say`:
   the recap it wrote for Claude desktop's "next step" box, and its question if it asks one. For
-  every session or only the ones with the bell; the voice and speed are yours to pick.
+  every session or only the ones with the bell; the voice and speed are yours to pick. By default it
+  uses the Mac's system voice, which can be Siri's (System Settings → Accessibility → Read & Speak).
 - **Search** every conversation you ever had (`/` or `⌘K`), archived ones included, in a palette
   as in Claude desktop: tabs, the words marked in the title and a quote, the keyboard to choose.
 - **Tasks** (optional): a markdown task list per project that Claude keeps for you, shown on each

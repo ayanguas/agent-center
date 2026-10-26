@@ -85,13 +85,14 @@ function ReadAloud() {
   return html`<li class=${`setup-step ${isOn ? "done" : "missing"}`}>
     <div class="setup-head"><b>Read aloud</b><span class="setup-need need-optional">Optional</span>
       ${isOn ? html`<span class="setup-state done"><${Icon} name="check" size=${13} />On</span>` : html`<span class="setup-state todo">Off</span>`}</div>
-    <p class="setup-text">When a session ends its turn, the Mac says what it did: the summary it writes at the end (the “next step” box of Claude desktop), and its question if it asks you one. Without a summary it only says that it finished. The session you are reading on the board is not read.</p>
+    <p class="setup-text">When a session ends its turn, the Mac says what it did: the summary it writes at the end (the “next step” box of Claude desktop), and its question if it asks you one. Without a summary it only says that it finished. The session you are reading on the board is not read. The most natural voice is Siri's: choose it in System Settings → Accessibility → Read & Speak (System speech language, then System voice) and keep “System voice” here.</p>
     <label class="setup-field">Read
       <select class="field" value=${speech.mode} onChange=${e => setSpeech({ ...speech, mode: e.target.value })}>
         ${SPEECH_MODES.map(([value, name]) => html`<option key=${value} value=${value}>${name}</option>`)}
       </select></label>
     ${isOn && html`<label class="setup-field">Voice
         <select class="field" value=${voice} onChange=${e => setSpeech({ ...speech, voice: e.target.value })}>
+          <option value="system">System voice (Read & Speak: Siri, if you chose it there)</option>
           ${shown.map(v => html`<option key=${v.name} value=${v.name}>${v.name} · ${v.locale.replace("_", "-")}</option>`)}
         </select></label>
       <label class="setup-field">Speed
