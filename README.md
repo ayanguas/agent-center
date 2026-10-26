@@ -14,8 +14,9 @@ sessions through a small Claude Code mod, and keeps its own state in a folder of
 - **Three views of your sessions.** **Inbox** (`1`): a list grouped by state. **Board** (`2`):
   the same sessions in columns — Asking you, To review, Working, Pending, Later, Done — with
   drag and drop, and lanes per repo (`G`). **Canvas** (`3`): cards you place anywhere,
-  with named zones, sticky notes (also attached to cards, with checklists), zoom, multi-select
-  and a Done strip at the bottom.
+  with named zones (fold one into a folder that says what its sessions wait for; drop a card
+  on it to add it), sticky notes (also attached to cards, with checklists), zoom,
+  multi-select and a Done strip at the bottom (what does not fit waits behind "+N more").
 - **Files** Claude shows you, as in Claude desktop's side panel: a file it sends is a chip in the
   conversation, a path it names is a link, and the **Files** tab lists what the session sent,
   published or wrote, with a viewer (markdown rendered, code, images, PDFs, HTML in a sandbox) and

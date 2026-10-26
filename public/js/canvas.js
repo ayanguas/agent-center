@@ -35,6 +35,11 @@ const isOverDone = ev => {
   return !!area && ev.clientY >= area.getBoundingClientRect().top && (!frame || ev.clientY <= frame.bottom)
 }
 const markDone = on => document.querySelectorAll(".done-area, .done-dock").forEach(el => el.classList.toggle("drop", on))
+// The folded zone under the pointer while a card is dragged: it takes it.
+const markFolder = ev => {
+  const over = ev && document.elementsFromPoint(ev.clientX, ev.clientY).find(e => e.matches?.(".zone.folder"))
+  document.querySelectorAll(".zone.folder").forEach(el => el.classList.toggle("drop", el === over))
+}
 
 // While a card is dragged near an edge of a zoomed canvas, the canvas scrolls.
 function edgeScroller(onScroll) {
@@ -65,12 +70,18 @@ function edgeScroller(onScroll) {
   }
 }
 
+// How tall each card was when last drawn: a card folded away in a zone is
+// not on screen, and its place still counts when another joins the zone.
+const heights = new Map()
+const heightOf = id => heights.get(id) ?? CARD_H
+
 // `at` is where the card sits on the canvas; `onDropped(card, to, ev, el, d)`
 // gets the canvas point where it was let go. The canvas is drawn at `scale`,
 // so a pointer move of 10 px is 10 / scale canvas units.
 function CanvasCard({ card, at, scale, onDropped, z, isPicked = false, onPick, group }) {
   const ui = useContext(Ctx)
   const ref = useRef()
+  useLayoutEffect(() => void (ref.current && heights.set(card.id, ref.current.offsetHeight)))
   const isDone = card.column === "done"
   const [state] = stateOf(card)
   const delay = -((hashOf(card.id) % 7000) / 1000) // stagger the nudges
@@ -88,6 +99,7 @@ function CanvasCard({ card, at, scale, onDropped, z, isPicked = false, onPick, g
     follow(card, d.x, d.y, false)
     group?.move(d)
     if (last.ev) markDone(!isDone && isOverDone(last.ev))
+    markFolder(last.ev)
   }
   const onPointerDown = dragHandler({
     onStart: () => {
@@ -104,6 +116,7 @@ function CanvasCard({ card, at, scale, onDropped, z, isPicked = false, onPick, g
       last = { dx, dy, ev }
       scroll.stop()
       markDone(false)
+      markFolder(null)
       const d = shift()
       onDropped(card, { x: at.x + d.x, y: at.y + d.y }, ev, ref.current, d)
     },
@@ -138,7 +151,22 @@ function CanvasCard({ card, at, scale, onDropped, z, isPicked = false, onPick, g
   </article>`
 }
 
-function Zone({ zone, scale, bounds, onChange, onRemove, onMoveWith, isNew = false }) {
+// A folded zone's summary: what of its sessions waits for you, works, is new.
+function folderSummary(cards) {
+  const count = test => cards.filter(test).length
+  return [
+    [count(c => c.column === "asking" && c.state !== "permission"), "asks you", "ask"],
+    [count(c => c.column === "asking" && c.state === "permission"), "approval", "permission"],
+    [count(c => c.column === "working"), "working", "work"],
+    [count(c => c.isUnread && c.column !== "asking"), "new", "new"],
+  ].filter(([n]) => n > 0)
+}
+
+// A zone groups the cards and notes inside it; folded ("collapsed"), it is a
+// folder tile: its name, how many sessions it holds and what of them waits
+// for you. Their places stay as they were: unfolding puts them back.
+function Zone({ zone, scale, bounds, onChange, onRemove, onMoveWith, isNew = false, members = [] }) {
+  const ui = useContext(Ctx)
   const ref = useRef()
   const nameField = useRef()
   const [isEditing, setEditing] = useState(isNew) // a zone just drawn asks for its name
@@ -173,7 +201,7 @@ function Zone({ zone, scale, bounds, onChange, onRemove, onMoveWith, isNew = fal
       onMoveWith(zone, dx, dy, true)
       onChange({ ...zone, x: snap(zone.x + dx), y: snap(zone.y + dy) })
     },
-    onClick: () => {},
+    onClick: () => zone.collapsed && onChange({ ...zone, collapsed: false }), // a click on a folder unfolds it
   })
   // A zone stays on the visible canvas, above "Done".
   const within = (z, dx, dy) => [
@@ -195,6 +223,25 @@ function Zone({ zone, scale, bounds, onChange, onRemove, onMoveWith, isNew = fal
       onChange({ ...zone, w: Math.max(160, Math.floor(w / GRID) * GRID), h: Math.max(120, Math.floor(h / GRID) * GRID) })
     },
   })
+  const fold = isFolded => onChange({ ...zone, collapsed: isFolded })
+  if (zone.collapsed)
+    return html`<section ref=${ref} class="zone folder" data-zone=${zone.id} style=${`left:${zone.x}px;top:${zone.y}px;width:${CARD_W}px;--hue:${hue(zone.name)}`}
+      onPointerDown=${startDrag} title="Click to unfold · drag to move it · drop a card on it to add it">
+      <header class="zone-head">
+        <${Icon} name="folder" size=${15} />
+        <span class="zone-name">${zone.name}</span><span class="folder-count">${members.length}</span>
+        <button class="icon-btn" title="Unfold" onClick=${() => fold(false)}><${Icon} name="expand" size=${13} /></button>
+      </header>
+      <div class="folder-states">
+        ${folderSummary(members).map(([n, label, tone]) => html`<span key=${tone} class=${`folder-state ${tone}`}>${n} ${label}</span>`)}
+        ${!members.length && html`<span class="muted">Empty</span>`}
+      </div>
+      ${members.length > 0 && html`<div class="folder-icons">
+        ${members.slice(0, 9).map(c => html`<button key=${c.id} class="folder-icon" title=${c.title} onClick=${e => (e.stopPropagation(), ui.openReader(c.id))}>
+          <${StateIcon} card=${c} size=${22} /></button>`)}
+        ${members.length > 9 && html`<span class="folder-more">+${members.length - 9}</span>`}
+      </div>`}
+    </section>`
   return html`<section ref=${ref} class="zone" style=${`left:${zone.x}px;top:${zone.y}px;width:${zone.w}px;height:${zone.h}px;--hue:${hue(zone.name)}`}
     onPointerDown=${startDrag} title="Drag to move the zone with its cards and notes">
     <header class="zone-head" onDblClick=${() => setEditing(true)} title="Drag to move the zone · double-click to rename">
@@ -206,6 +253,8 @@ function Zone({ zone, scale, bounds, onChange, onRemove, onMoveWith, isNew = fal
             }}
             onBlur=${() => finish(true)} />`
         : html`<span class="zone-name">${zone.name}</span>`}
+      <button class="icon-btn zone-fold" title="Fold into a folder (its cards stay where they are)" onClick=${() => fold(true)}>
+        <${Icon} name="shrink" size=${13} /></button>
       <button class="icon-btn zone-x" title="Remove the zone (the cards stay)" onClick=${() => onRemove(zone)}>
         <${Icon} name="x" size=${13} /></button>
     </header>
@@ -328,6 +377,24 @@ export function Canvas({ cards, zones: savedZones, notes: savedNotes, isDrawingZ
     const c = openByKey.get(n.cardId)
     return c ? [{ note: n, at: { x: pos[c.id].x + n.x, y: pos[c.id].y + n.y }, card: c }] : []
   })
+  // What each zone holds: the cards and free notes whose top centre lies in
+  // it. A folded zone hides them (their places stay).
+  const isIn = (z, x, y) => x >= z.x && x <= z.x + z.w && y >= z.y && y <= z.y + z.h
+  const membersOf = z => openCards.filter(c => isIn(z, pos[c.id].x + CARD_W / 2, pos[c.id].y + 40))
+  const folded = zones.filter(z => z.collapsed)
+  const hidden = new Set(folded.flatMap(z => membersOf(z).map(c => c.id)))
+  // Where a card added to a zone goes: the first place inside it that no
+  // card takes (a grid step apart), else below them all, the zone taller to
+  // hold it. `taken`: the rects already in the zone; `h`: the card's height.
+  const placeIn = (z, taken, h) => {
+    const isFree = (x, y) => taken.every(r => x + CARD_W + GRID <= r.x || r.x + r.w + GRID <= x || y + h + GRID <= r.y || r.y + r.h + GRID <= y)
+    for (let y = z.y + 48; y + h <= z.y + z.h - GRID; y += GRID)
+      for (let x = z.x + GRID; x + CARD_W <= z.x + z.w - GRID; x += GRID) if (isFree(x, y)) return { at: { x: snap(x), y: snap(y) }, zone: z }
+    const at = { x: snap(z.x + GRID), y: snap(Math.max(z.y + 48, ...taken.map(r => r.y + r.h + GRID))) }
+    return { at, zone: { ...z, w: Math.max(z.w, CARD_W + GRID * 2), h: Math.max(z.h, at.y - z.y + h + GRID) } }
+  }
+  const isNoteHidden = n => (n.card ? hidden.has(n.card.id) : folded.some(z => isIn(z, n.at.x + n.note.w / 2, n.at.y + 20)))
+
   // The card a note at `r` would attach to: the nearest one it overlaps or
   // comes within a grid step of.
   const findCard = r => {
@@ -536,7 +603,11 @@ export function Canvas({ cards, zones: savedZones, notes: savedNotes, isDrawingZ
     }
     for (const c of dragRef.current.cards) {
       const el = document.querySelector(`.ccard[data-id="${c.id}"]`)
-      if (!el) continue
+      // In a folded zone: no card on screen, but its place moves with the zone.
+      if (!el) {
+        if (isDrop) place(c, { x: snap(pos[c.id].x + dx), y: snap(pos[c.id].y + dy) })
+        continue
+      }
       if (!isDrop) el.style.transform = `translate(${dx}px, ${dy}px)`
       else {
         el.style.transform = ""
@@ -605,6 +676,28 @@ export function Canvas({ cards, zones: savedZones, notes: savedNotes, isDrawingZ
       for (const k of othersOf(key)) if (k.startsWith("c:") && cardOf(k)) ui.act(cardOf(k), "done")
       setPicked(new Set())
       return ui.act(card, "done")
+    }
+    // Let go on a folded zone: into it (and the picked cards with it), each
+    // at a place inside the zone, for when it unfolds.
+    const folderEl = document.elementsFromPoint(ev.clientX, ev.clientY).find(e => e.matches?.(".zone.folder"))
+    const folder = folderEl && zones.find(z => z.id === folderEl.dataset.zone)
+    if (folder) {
+      const moving = [card, ...othersOf(key).filter(k => k.startsWith("c:")).map(cardOf).filter(Boolean)]
+      el.style.transform = ""
+      groupReset(key)
+      const taken = membersOf(folder).map(c => ({ ...pos[c.id], w: CARD_W, h: heightOf(c.id) }))
+      let zone = folder
+      for (const c of moving) {
+        follow(c, 0, 0, true)
+        const spot = placeIn(zone, taken, heightOf(c.id))
+        zone = spot.zone
+        taken.push({ ...spot.at, w: CARD_W, h: heightOf(c.id) })
+        place(c, spot.at)
+        if (c.column === "done") ui.act(c, "undone")
+      }
+      if (zone !== folder) saveZones(zones.map(z => (z.id === zone.id ? zone : z)))
+      setPicked(new Set())
+      return ui.toast(`${moving.length === 1 ? "Added" : `${moving.length} added`} to ${folder.name}`)
     }
     const next = {
       x: Math.min(snap(to.x), Math.floor((width - CARD_W) / GRID) * GRID),
@@ -735,16 +828,16 @@ export function Canvas({ cards, zones: savedZones, notes: savedNotes, isDrawingZ
       ${zones.map(
         z => html`<${Zone} key=${z.id} zone=${z} scale=${scale} bounds=${bounds} onMoveWith=${moveWith}
           onChange=${next => saveZones(zones.map(x => (x.id === next.id ? next : x)))}
-          onRemove=${gone => saveZones(zones.filter(x => x.id !== gone.id))} isNew=${z.id === newZoneId} />`,
+          onRemove=${gone => saveZones(zones.filter(x => x.id !== gone.id))} isNew=${z.id === newZoneId} members=${membersOf(z)} />`,
       )}
-      ${shown.map(
+      ${shown.filter(n => !isNoteHidden(n)).map(
         ({ note: n, at, card }) => html`<${Note} key=${n.id} note=${n} at=${at} card=${card} scale=${scale} bounds=${bounds}
           findCard=${findCard} onPlace=${placeNote} onRemove=${removeNote}
           isPicked=${picked.has(`n:${n.id}`)} onPick=${isAdding => pick(`n:${n.id}`, isAdding)} group=${groupFor(`n:${n.id}`)}
           onChange=${next => saveNotes(notes.map(x => (x.id === next.id ? { ...x, w: next.w, h: next.h, color: next.color } : x)))}
           onText=${(note, text, opts) => saveNotes(notes.map(x => (x.id === note.id ? { ...x, text } : x)), opts)} />`,
       )}
-      ${openCards.map(card => html`<${CanvasCard} key=${card.id} card=${card} at=${pos[card.id]} scale=${scale} onDropped=${dropped}
+      ${openCards.filter(card => !hidden.has(card.id)).map(card => html`<${CanvasCard} key=${card.id} card=${card} at=${pos[card.id]} scale=${scale} onDropped=${dropped}
         isPicked=${picked.has(`c:${card.id}`)} onPick=${isAdding => pick(`c:${card.id}`, isAdding)} group=${groupFor(`c:${card.id}`)} />`)}
       ${isDrawingZone && html`<div class="zone-draw" style=${`height:${doneTop}px`} onPointerDown=${startZone}></div>`}
       ${draft && html`<div class="zone zone-draft" style=${`left:${Math.min(draft.x0, draft.x1)}px;top:${Math.min(draft.y0, draft.y1)}px;width:${Math.abs(draft.x1 - draft.x0)}px;height:${Math.abs(draft.y1 - draft.y0)}px;--hue:${hue("New zone")}`}></div>`}

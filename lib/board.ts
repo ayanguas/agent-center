@@ -21,7 +21,8 @@ export type BoardItem = {
 }
 
 // A named rectangle on the canvas; cards inside it belong to it by position.
-export type Zone = { id: string; name: string; x: number; y: number; w: number; h: number }
+// collapsed: folded into a folder tile on the canvas (its cards keep their places).
+export type Zone = { id: string; name: string; x: number; y: number; w: number; h: number; collapsed?: boolean }
 // A note attached to a card (cardId: the card's desktop id, or its session id)
 // keeps x, y relative to that card, and moves with it.
 export type Note = { id: string; text: string; x: number; y: number; w: number; h: number; color: string; cardId: string | null }
@@ -144,6 +145,7 @@ export async function setZones(raw: unknown[]) {
       y: Math.max(0, Math.round(Number(z?.y) || 0)),
       w: Math.max(160, Math.round(Number(z?.w) || 320)),
       h: Math.max(120, Math.round(Number(z?.h) || 220)),
+      ...(z?.collapsed === true ? { collapsed: true } : {}),
     }))
     .slice(0, 50)
   await saveBoard()
