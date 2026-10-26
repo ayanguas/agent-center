@@ -134,7 +134,9 @@ async function scan(sessionIds: Set<string>) {
   for (const r of rows.values()) {
     if (base(r.command.split(" --")[0]!.trim()) !== "claude") continue
     const id = r.command.match(/--(?:resume|session-id)[= ]([0-9a-f-]{36})/)?.[1]
-    if (!id) continue
+    // Only the board's own sessions: a board started for the tests must
+    // never count (or stop) what the person's sessions run.
+    if (!id || !sessionIds.has(id)) continue
     claimed.add(r.pid)
     add(id, { pid: r.pid, kind: "session", label: "Claude (the session)", command: "", cwd: null, bytes: mem.get(r.pid) ?? 0, since: r.since, isDetached: false, idleSince: null, isForgotten: false })
     for (const child of kids.get(r.pid) ?? []) add(id, item(child, "command", false))
