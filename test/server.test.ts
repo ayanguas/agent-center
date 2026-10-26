@@ -86,6 +86,8 @@ beforeAll(async () => {
     await mkdir(join(desktop, folder), { recursive: true })
     await writeFile(join(desktop, folder, "local_demo.json"), JSON.stringify({ sessionId: "local_demo", cliSessionId, cwd: home, title: "Demo session", lastActivityAt: at }))
   }
+  // The dev-server session is archived in the app.
+  await writeFile(join(desktop, "a-account/org", "local_server.json"), JSON.stringify({ sessionId: "local_server", cliSessionId: SERVER, cwd: home, title: "Dev server", lastActivityAt: now, isArchived: true }))
 
   port = 20000 + Math.floor(Math.random() * 20000)
   server = Bun.spawn(["bun", "server.ts"], {
@@ -210,6 +212,14 @@ describe("messages to the session", () => {
     const bridge = await jsonOf(fetch(`${base()}/api/sessions/${ID}/bridge`))
     expect(bridge.queued.map((q: any) => q.id)).toContain(sent.messageId)
     expect((await post(`/api/sessions/${ID}/unsend`, { messageId: sent.messageId })).status).toBe(200)
+  })
+
+  test("refuses a message for a session archived in the app, and says so", async () => {
+    const res = await post(`/api/sessions/${SERVER}/send`, { text: "hello" })
+    expect(res.status).toBe(409)
+    expect((await jsonOf(res)).error).toContain("archived")
+    expect((await jsonOf(fetch(`${base()}/api/sessions/${SERVER}/bridge`))).isArchived).toBe(true)
+    expect((await jsonOf(fetch(`${base()}/api/sessions/${ID}/bridge`))).isArchived).toBe(false)
   })
 
   test("refuses an empty message", async () => {

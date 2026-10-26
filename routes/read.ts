@@ -6,7 +6,7 @@ import { basename } from "node:path"
 import { status as bridgeStatus } from "../lib/bridge"
 import { changesOf } from "../lib/changes"
 import { HOME } from "../lib/config"
-import { readDesktop } from "../lib/desktop"
+import { isArchivedInApp, readDesktop } from "../lib/desktop"
 import { lastDigest } from "../lib/digest"
 import { detail as prDetail, lookup as prLookup, openThreads } from "../lib/github"
 import { json } from "../lib/http"
@@ -113,7 +113,7 @@ async function sessionRead(id: string, what: string, url: URL) {
       return result ? json(result) : json({ error: "This session's folder is not a git repository" }, 404)
     }
     case "bridge":
-      return json({ ...(await bridgeStatus(id)), wake: wakeState(id) })
+      return json({ ...(await bridgeStatus(id)), wake: wakeState(id), isArchived: await isArchivedInApp(group?.ids ?? [id]) })
     case "prs": {
       const refs = group ? await prRefs(group.ids, group.root, group.branch) : await prRefs([id], HOME, null)
       // The branch's PR resolves to a URL through the summary cache.

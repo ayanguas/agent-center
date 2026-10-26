@@ -97,6 +97,7 @@ export function Composer({ id, card, bridge, isWorking, onSent }) {
 
   const send = async () => {
     if ((!text.trim() && !files.length) || isSending) return
+    if (bridge?.isArchived) return ui.toast("Archived in Claude: unarchive it there (Open in Claude), then write")
     setSending(true)
     let paths = []
     try {
@@ -154,9 +155,11 @@ export function Composer({ id, card, bridge, isWorking, onSent }) {
   }
   // Claude stops idle sessions (30 min, or sooner when memory is short); the
   // server wakes them in the background and tries again while messages wait.
-  const isStuck = !!bridge?.stuck?.length || !!bridge?.wake?.untrusted
+  const isStuck = !!bridge?.stuck?.length || !!bridge?.wake?.untrusted || !!bridge?.isArchived
   const state = !bridge
     ? ["", "Checking the session…"]
+    : bridge.isArchived
+      ? ["bad", "Archived in Claude: it does not wake until you unarchive it there (Open in Claude)"]
     : bridge.wake?.untrusted
       ? ["bad", "Claude does not trust this session's folder: open it in Claude and accept"]
     : bridge.stuck?.length
@@ -195,7 +198,8 @@ export function Composer({ id, card, bridge, isWorking, onSent }) {
               title="Opens the session in Claude desktop">Open in Claude</button>`
           : canWake && html`<button type="button" class="btn subtle wake" onClick=${wake}
               title="Starts the session in Claude, in the background, so it gets messages">Wake</button>`}
-        <button class="btn primary send" disabled=${(!text.trim() && !files.length) || isSending} title="Send (↵) · new line (⇧↵)">
+        <button class="btn primary send" disabled=${(!text.trim() && !files.length) || isSending || !!bridge?.isArchived}
+          title=${bridge?.isArchived ? "Archived in Claude: unarchive it there to write" : "Send (↵) · new line (⇧↵)"}>
           <${Icon} name="send" size=${14} /></button>
       </div>
     </div>

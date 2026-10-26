@@ -102,3 +102,10 @@ export async function readDesktop(): Promise<DesktopIndex> {
   for (const path of [...cache.keys()]) if (!seen.has(path)) cache.delete(path)
   return { ok: true, byCli, byHost }
 }
+
+// Archived in the app: it starts no session there until it is unarchived
+// (the app has no link for that), so a message for it would only wait.
+export async function isArchivedInApp(ids: string[]) {
+  const desktop = await readDesktop()
+  return ids.some(id => desktop.byCli.get(id)?.isArchived)
+}

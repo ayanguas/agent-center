@@ -6,6 +6,7 @@
 import { applyAction, isBoardAction } from "../lib/board"
 import { answer as answerQuestion, isBusy, permit, requestSettings, send as sendMessage, status as bridgeStatus, stop as stopTurn, unsend } from "../lib/bridge"
 import { activate, openInClient } from "../lib/client"
+import { isArchivedInApp } from "../lib/desktop"
 import { commandStatus, runCommand, stopCommand } from "../lib/commands"
 import { EFFORTS, MODES } from "../lib/config"
 import { forkPoint } from "../lib/fork"
@@ -19,6 +20,8 @@ import { groupOf, knownSessionIds } from "../lib/snapshot"
 import { wokeNow } from "../lib/wake"
 
 async function send(id: string, body: Record<string, unknown>) {
+  if (await isArchivedInApp(groupOf(id)?.ids ?? [id]))
+    return json({ error: "This session is archived in Claude: unarchive it there (Open in Claude), then write" }, 409)
   try {
     const messageId = await sendMessage(id, String(body.text ?? ""))
     refreshSoon()

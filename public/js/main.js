@@ -101,7 +101,8 @@ function App() {
   const composerFocus = useRef(null)
   const searchBox = useRef()
 
-  const setView = v => (setViewRaw(v), keep("view", v), setDrawingZone(false))
+  // Choosing a view (the sidebar, keys 1 2 3) also leaves a search.
+  const setView = v => (setViewRaw(v), keep("view", v), setDrawingZone(false), setQuery(""))
   const setRepoFilter = r => (setRepoFilterRaw(r), keep("repoFilter", r), setSideOpen(false))
   const setShowDone = v => (setShowDoneRaw(v), keep("showDone", v))
   const setGroupBy = v => (setGroupByRaw(v), keep("groupBy", v))
