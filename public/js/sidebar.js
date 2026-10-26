@@ -65,6 +65,9 @@ export function Sidebar({ data, repoFilter, view, connected, notify, sound }) {
       <button class=${`ghost-btn ${sound === "on" ? "on" : ""}`} onClick=${() => ui.toggleSound()}
         title=${sound === "on" ? "Sound on: a chime when a session finishes or asks you something, also while you look at the board. Click to turn it off" : "Play a chime when a session finishes or asks me something, also while I look at the board"}>
         <${Icon} name=${sound === "on" ? "volume" : "volumeOff"} size=${15} /></button>
+      <button class=${`ghost-btn ${ui.speech.mode !== "off" ? "on" : ""}`} onClick=${() => ui.toggleSpeech()}
+        title=${ui.speech.mode !== "off" ? `Read aloud on (${ui.speech.mode === "all" ? "every session" : "sessions with the bell"}): the Mac says what a session did when its turn ends. Click to turn it off` : "Read aloud what a session did when its turn ends (voice and speed in Setup)"}>
+        <${Icon} name="voice" size=${15} /></button>
       <button class="ghost-btn" onClick=${() => ui.openDialog("setup")} title="Setup: hook, mod, dictation, tasks…">
         <${Icon} name="gear" size=${15} /></button>
       <button class="ghost-btn" onClick=${() => ui.openDialog("help")} title="Keyboard shortcuts (?)">

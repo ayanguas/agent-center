@@ -53,6 +53,12 @@ function App() {
   // session ("all"), only the ones with the bell ("watched") or none ("off").
   const [speech, setSpeechRaw] = useState(() => load("speech", { mode: "off", voice: null, rate: null }))
   const setSpeech = next => (setSpeechRaw(next), keep("speech", next))
+  // The sidebar's quick switch: off, or back to the last choice.
+  const toggleSpeech = () => {
+    const next = speech.mode === "off" ? { ...speech, mode: speech.lastMode ?? "all" } : { ...speech, mode: "off", lastMode: speech.mode }
+    setSpeech(next)
+    toast(next.mode === "off" ? "Read aloud off" : `Read aloud on: ${next.mode === "all" ? "every session" : "only sessions with the bell"}`)
+  }
   // Sessions you asked to hear about once (the bell on a card): a chime, a
   // note and, in another window, a notification when the turn ends or asks.
   const [watched, setWatchedRaw] = useState(() => new Set(load("watched", [])))
@@ -640,6 +646,7 @@ function App() {
     toggleSound,
     speech,
     setSpeech,
+    toggleSpeech,
     registerComposer: fn => (composerFocus.current = fn),
     watched,
     toggleWatch,
