@@ -218,11 +218,13 @@ function Zone({ zone, scale, bounds, onChange, onRemove, onMoveWith, isNew = fal
     },
     onClick: () => zone.collapsed && fold(false), // a click on a folder unfolds it
   })
-  // A zone stays on the visible canvas, above "Done".
-  const within = (z, dx, dy) => [
-    Math.min(Math.max(dx, -z.x), Math.max(0, bounds.w - z.x - z.w)),
-    Math.min(Math.max(dy, -z.y), Math.max(0, bounds.h - z.y - z.h)),
-  ]
+  // A zone stays on the visible canvas, above "Done": as big as it shows
+  // (folded, a folder's size; unfolding makes room, below).
+  const within = (z, dx, dy) => {
+    const w = z.collapsed ? CARD_W : z.w
+    const h = z.collapsed ? (ref.current?.offsetHeight ?? FOLDER_H) : z.h
+    return [Math.min(Math.max(dx, -z.x), Math.max(0, bounds.w - z.x - w)), Math.min(Math.max(dy, -z.y), Math.max(0, bounds.h - z.y - h))]
+  }
   const sizeOf = (dx, dy) => ({
     w: Math.max(160, Math.min(zone.w + dx / scale, bounds.w - zone.x)),
     h: Math.max(120, Math.min(zone.h + dy / scale, bounds.h - zone.y)),
@@ -242,9 +244,20 @@ function Zone({ zone, scale, bounds, onChange, onRemove, onMoveWith, isNew = fal
   // closes up to its size; the change is saved once they are in. Unfolding
   // (below) plays it backwards.
   const closing = useRef(null)
+  // Unfolding a folder left low or far right: the zone first moves (with
+  // its cards) up or left as much as it needs to fit above "Done".
+  const shift = useRef({ dx: 0, dy: 0 })
+  const unfold = () => {
+    const dx = Math.max(-zone.x, Math.min(0, bounds.w - zone.x - zone.w))
+    const dy = Math.max(-zone.y, Math.min(0, bounds.h - zone.y - zone.h))
+    shift.current = { dx, dy }
+    if (dx || dy) onMoveWith(zone, dx, dy, true)
+    onChange({ ...zone, x: zone.x + dx, y: zone.y + dy, collapsed: false })
+  }
   const fold = isFolded => {
     quietly(members.map(c => c.id))
-    if (!isFolded || isCalm()) return onChange({ ...zone, collapsed: isFolded })
+    if (!isFolded) return unfold()
+    if (isCalm()) return onChange({ ...zone, collapsed: true })
     const flights = members
       .map(c => document.querySelector(`.ccard[data-id="${c.id}"]`))
       .filter(Boolean)
@@ -267,11 +280,16 @@ function Zone({ zone, scale, bounds, onChange, onRemove, onMoveWith, isNew = fal
       ref.current.animate([{ transform: "scale(0.96)" }, { transform: "none" }], { duration: 220, easing: FOLD_EASE })
       return
     }
-    ref.current.animate([{ clipPath: folderClip(zone) }, { clipPath: "inset(0 round 14px)" }], { duration: 300, easing: FOLD_EASE })
+    // From where the folder was (the zone may have moved up to fit).
+    const { dx: sx, dy: sy } = shift.current
+    shift.current = { dx: 0, dy: 0 }
+    const folderAt = { ...zone, x: zone.x - sx, y: zone.y - sy }
+    ref.current.animate([{ clipPath: folderClip(zone), transform: `translate(${-sx}px, ${-sy}px)` }, { clipPath: "inset(0 round 14px)", transform: "none" }],
+      { duration: 300, easing: FOLD_EASE })
     members.forEach((c, i) => {
       const el = document.querySelector(`.ccard[data-id="${c.id}"]`)
       if (!el) return
-      const { dx, dy } = towardFolder(el, zone)
+      const { dx, dy } = towardFolder(el, folderAt)
       el.animate([{ transform: `translate(${dx}px, ${dy}px) scale(0.35)`, opacity: 0 }, { transform: "none", opacity: 1 }],
         { duration: 320, delay: 40 + i * 22, easing: FOLD_EASE, fill: "backwards" })
     })
@@ -684,8 +702,11 @@ export function Canvas({ cards, zones: savedZones, notes: savedNotes, isDrawingZ
   // card can only go where you can see. Zoomed in, it scrolls (see below).
   // "Done" is the bottom band.
   const entryH = Math.max(1, Math.ceil(entrySlots / ENTRY.cols)) * CARD_H + GRID
-  const needW = Math.max(...openCards.map(c => pos[c.id].x + CARD_W), ...zones.map(z => z.x + z.w), ...shown.map(n => n.at.x + n.note.w), ENTRY.x + ENTRY.cols * (CARD_W + GRID)) + GRID
-  const needH = Math.max(...openCards.map(c => pos[c.id].y + CARD_H), ...zones.map(z => z.y + z.h), ...shown.map(n => n.at.y + n.note.h), ENTRY.y + entryH) + GRID + DONE_H
+  // A folded zone counts as its folder: its cards and notes are out of sight.
+  const seen = openCards.filter(c => !hidden.has(c.id))
+  const seenNotes = shown.filter(n => !isNoteHidden(n))
+  const needW = Math.max(...seen.map(c => pos[c.id].x + CARD_W), ...zones.map(z => z.x + (z.collapsed ? CARD_W : z.w)), ...seenNotes.map(n => n.at.x + n.note.w), ENTRY.x + ENTRY.cols * (CARD_W + GRID)) + GRID
+  const needH = Math.max(...seen.map(c => pos[c.id].y + CARD_H), ...zones.map(z => z.y + (z.collapsed ? FOLDER_H : z.h)), ...seenNotes.map(n => n.at.y + n.note.h), ENTRY.y + entryH) + GRID + DONE_H
   const fit = view.w && view.h ? Math.min(1, view.w / needW, view.h / needH) : 1
   const minZoom = Math.min(fit, MIN_ZOOM)
   const scale = zoom ? Math.min(MAX_ZOOM, Math.max(minZoom, zoom)) : fit
@@ -898,14 +919,14 @@ export function Canvas({ cards, zones: savedZones, notes: savedNotes, isDrawingZ
           onChange=${next => saveZones(zones.map(x => (x.id === next.id ? next : x)))}
           onRemove=${gone => saveZones(zones.filter(x => x.id !== gone.id))} isNew=${z.id === newZoneId} members=${membersOf(z)} />`,
       )}
-      ${shown.filter(n => !isNoteHidden(n)).map(
+      ${seenNotes.map(
         ({ note: n, at, card }) => html`<${Note} key=${n.id} note=${n} at=${at} card=${card} scale=${scale} bounds=${bounds}
           findCard=${findCard} onPlace=${placeNote} onRemove=${removeNote}
           isPicked=${picked.has(`n:${n.id}`)} onPick=${isAdding => pick(`n:${n.id}`, isAdding)} group=${groupFor(`n:${n.id}`)}
           onChange=${next => saveNotes(notes.map(x => (x.id === next.id ? { ...x, w: next.w, h: next.h, color: next.color } : x)))}
           onText=${(note, text, opts) => saveNotes(notes.map(x => (x.id === note.id ? { ...x, text } : x)), opts)} />`,
       )}
-      ${openCards.filter(card => !hidden.has(card.id)).map(card => html`<${CanvasCard} key=${card.id} card=${card} at=${pos[card.id]} scale=${scale} onDropped=${dropped}
+      ${seen.map(card => html`<${CanvasCard} key=${card.id} card=${card} at=${pos[card.id]} scale=${scale} onDropped=${dropped}
         isPicked=${picked.has(`c:${card.id}`)} onPick=${isAdding => pick(`c:${card.id}`, isAdding)} group=${groupFor(`c:${card.id}`)} />`)}
       ${isDrawingZone && html`<div class="zone-draw" style=${`height:${doneTop}px`} onPointerDown=${startZone}></div>`}
       ${draft && html`<div class="zone zone-draft" style=${`left:${Math.min(draft.x0, draft.x1)}px;top:${Math.min(draft.y0, draft.y1)}px;width:${Math.abs(draft.x1 - draft.x0)}px;height:${Math.abs(draft.y1 - draft.y0)}px;--hue:${hue("New zone")}`}></div>`}
