@@ -51,7 +51,7 @@ type Scan = {
   offset: number
   // One entry per API response: streaming writes a row per content block,
   // each repeating the response's usage; the last one wins.
-  messages: Map<string, { model: string; usage: Usage; isMain: boolean }>
+  messages: Map<string, { model: string; usage: Usage; isMain: boolean; at: number }>
   lastContext: number
   lastModel: string | null
 }
@@ -70,7 +70,7 @@ function ingest(scan: Scan, chunk: string) {
     const msg = row.message
     if (row.type !== "assistant" || !msg?.usage || msg.model === "<synthetic>") continue
     const isMain = !row.isSidechain
-    scan.messages.set(msg.id ?? row.uuid, { model: msg.model ?? "", usage: msg.usage, isMain })
+    scan.messages.set(msg.id ?? row.uuid, { model: msg.model ?? "", usage: msg.usage, isMain, at: Date.parse(row.timestamp ?? "") || 0 })
     if (isMain) {
       const u: Usage = msg.usage
       scan.lastContext = (u.input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0) + (u.output_tokens ?? 0)
@@ -92,7 +92,9 @@ async function scanned(sessionId: string): Promise<Scan | null> {
   return scan
 }
 
-export type SessionUsage = { context: number; window: number; cost: number; model: string | null }
+// recentCost: what it spent in the last 5 hours, the plan's short window.
+export type SessionUsage = { context: number; window: number; cost: number; recentCost: number; model: string | null }
+const RECENT_MS = 5 * 3600_000
 
 // `current` is the CLI id running now (its last request is the live
 // context); `ids` are every CLI id of the session, for the total cost.
@@ -100,7 +102,14 @@ export async function usageOf(current: string, ids: string[]): Promise<SessionUs
   const scans = (await Promise.all(ids.map(id => scanned(id).catch(() => null)))).filter(Boolean) as Scan[]
   if (scans.length === 0) return null
   let cost = 0
-  for (const scan of scans) for (const m of scan.messages.values()) cost += costOf(m.model, m.usage)
+  let recentCost = 0
+  const since = Date.now() - RECENT_MS
+  for (const scan of scans)
+    for (const m of scan.messages.values()) {
+      const c = costOf(m.model, m.usage)
+      cost += c
+      if (m.at >= since) recentCost += c
+    }
   const live = (await scanned(current).catch(() => null)) ?? scans[0]!
-  return { context: live.lastContext, window: WINDOW, cost: Math.round(cost * 100) / 100, model: live.lastModel }
+  return { context: live.lastContext, window: WINDOW, cost: Math.round(cost * 100) / 100, recentCost: Math.round(recentCost * 100) / 100, model: live.lastModel }
 }

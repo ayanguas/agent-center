@@ -52,7 +52,7 @@ export function Sidebar({ data, repoFilter, view, connected, notify, sound }) {
         </button>`,
       )}
     </nav>
-    <${Limits} limits=${data.limits} />
+    <${Limits} limits=${data.limits} cards=${data.cards} />
     <${SessionsMemory} data=${data} />
     <button class=${`side-uploads ${uploadsTone}`} title="Open the sent files folder in Finder"
       onClick=${async () => !(await post("/api/uploads/open")).body.ok && ui.toast("Could not open the folder")}>
@@ -118,6 +118,13 @@ function untilText(ms) {
   return h % 24 ? `${Math.floor(h / 24)} d ${h % 24} h` : `${Math.floor(h / 24)} d`
 }
 
+// A time later today ("14:20"), or with its day.
+function clockOf(t, now) {
+  const d = new Date(t)
+  const time = d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })
+  return new Date(now).toDateString() === d.toDateString() ? time : `${d.toLocaleDateString("en-GB", { weekday: "short" })} ${time}`
+}
+
 function resetAt(t, now) {
   const d = new Date(t)
   const time = d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })
@@ -126,11 +133,30 @@ function resetAt(t, now) {
   return `${d.toLocaleDateString("en-GB", { weekday: "long" })} at ${time}`
 }
 
+// Where a window gets at this pace: full before it resets (and when), or
+// how much it will have used when it does. Too early in it to tell: null.
+function forecast(pct, reset, span, now) {
+  const gone = span - (reset - now)
+  if (pct < 3 || gone < span * 0.08) return null
+  const rate = pct / gone
+  const fullAt = now + (100 - pct) / rate
+  return fullAt < reset ? { fullAt } : { atReset: Math.min(100, Math.round(pct + rate * (reset - now))) }
+}
+
+// The sessions that spent the most of the last 5 hours (API prices as the
+// measure: the plan does not say what each one used).
+function topSpenders(cards) {
+  const spent = cards.filter(c => c.usage?.recentCost > 0)
+  const total = spent.reduce((sum, c) => sum + c.usage.recentCost, 0)
+  return total ? spent.sort((a, b) => b.usage.recentCost - a.usage.recentCost).slice(0, 3).map(c => ({ card: c, share: Math.round((c.usage.recentCost / total) * 100) })) : []
+}
+
 // The account's rate-limit windows, as the freshest session read them (the
 // bridge mod), in the sidebar: how much is used (amber from 70%, red from
-// 90%), a mark for the time gone by in the window, when it resets and whether
-// the use runs ahead of that time.
-function Limits({ limits }) {
+// 90%), a mark for the time gone by in the window, when it resets, whether
+// the use runs ahead of that time and where it gets at this pace; under the
+// 5-hour window, which sessions used most of it.
+function Limits({ limits, cards = [] }) {
   const ui = useContext(Ctx)
   if (!limits?.windows?.length) return null
   const isOld = ui.now - limits.at > 30 * 60_000
@@ -151,8 +177,10 @@ function Limits({ limits }) {
       elapsed,
       // Use against time gone by, with 5 points of slack.
       pace: elapsed === null ? null : pct > elapsed + 5 ? "over" : pct < elapsed - 5 ? "under" : "even",
+      ahead: reset && span && !hasReset ? forecast(w.percentUsed, reset, span, ui.now) : null,
     }
   })
+  const spenders = topSpenders(cards)
   return html`<section class=${`side-limits ${isOld ? "old" : ""}`}
     title=${isOld ? `Data from ${ago(limits.at, ui.now)} ago: no open session has updated it` : "Plan limits"}>
     ${rows.map(
@@ -164,6 +192,12 @@ function Limits({ limits }) {
           ${r.hasReset ? "Already reset" : r.reset ? html`Resets in <b>${r.left}</b>` : "No reset time"}
         </div>
         ${(r.reset && !r.hasReset) && html`<div class="limit-pace">${resetAt(r.reset, ui.now)}${r.pace && html` · <span class=${`pace-${r.pace}`}>${PACE_SHORT[r.pace]}</span>`}</div>`}
+        ${r.ahead && html`<div class=${`limit-ahead ${r.ahead.fullAt ? "full" : ""}`} title="If you keep the pace of the time gone by in this window">
+          ${r.ahead.fullAt ? html`At this pace, full at <b>${clockOf(r.ahead.fullAt, ui.now)}</b>` : html`At this pace, about <b>${r.ahead.atReset}%</b> at reset`}</div>`}
+        ${r.kind === "five_hour" && spenders.length > 0 && html`<div class="limit-spenders"
+          title="Share of what your sessions spent in the last 5 hours, at API prices (the plan does not say what each one used)">
+          ${spenders.map(({ card, share }) => html`<button key=${card.id} onClick=${() => ui.openReader(card.id)}><span class="t">${card.title}</span><span class="n">${share}%</span></button>`)}
+        </div>`}
       </div>`,
     )}
   </section>`
