@@ -1605,3 +1605,18 @@ button.file-chip { cursor: pointer; font: inherit; font-size: 12.5px; }
 /* two sessions that may step on each other */
 .overlap-chip { color: var(--ask); background: var(--ask-soft); max-width: 240px; }
 .overlap-chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* a file's type, coloured by family; previews of office files and tables */
+.file-ext.fam-sheet { background: rgb(22 163 74 / 0.16); color: var(--work); }
+.file-ext.fam-doc { background: color-mix(in srgb, var(--review) 18%, transparent); color: var(--review); }
+.file-ext.fam-slides { background: var(--run-soft); color: var(--run); }
+.file-ext.fam-pdf { background: var(--bad-soft); color: var(--bad); }
+.file-ext.fam-media { background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); }
+.file-doc { background: #fff; color: #1d1d1f; min-height: 100%; }
+.file-ql { margin: 0; padding: 14px; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.file-ql .file-img { margin: 0; box-shadow: var(--shadow-pop); background: #fff; }
+.file-ql figcaption { font-size: 12px; }
+.file-table { padding: 12px; overflow: auto; }
+.file-table table { border-collapse: collapse; font-size: 12.5px; }
+.file-table th, .file-table td { border: 1px solid var(--line); padding: 4px 8px; text-align: left; vertical-align: top; white-space: pre-wrap; max-width: 420px; }
+.file-table th { background: var(--side); position: sticky; top: 0; }

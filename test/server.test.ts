@@ -214,6 +214,13 @@ describe("board", () => {
     expect(Object.values(board.items).some((i: any) => i.title === "Renamed")).toBe(true)
   })
 
+  test("finds a session by the name given on the board", async () => {
+    await Bun.sleep(1200) // the next snapshot has the name
+    const { results } = await jsonOf(fetch(`${base()}/api/search?q=renamed`))
+    expect(results[0]?.id).toBe(ID)
+    expect(results[0].title).toBe("Renamed")
+  })
+
   test("refuses an unknown action without touching the board", async () => {
     const before = await readFile(join(data, "board.json"), "utf8")
     expect((await post(`/api/sessions/${ID}/frobnicate`)).status).toBe(400)

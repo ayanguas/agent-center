@@ -19,8 +19,9 @@ sessions through a small Claude Code mod, and keeps its own state in a folder of
   multi-select and a Done strip at the bottom (what does not fit waits behind "+N more").
 - **Files** Claude shows you, as in Claude desktop's side panel: a file it sends is a chip in the
   conversation, a path it names is a link, and the **Files** tab lists what the session sent,
-  published or wrote, with a viewer (markdown rendered, code, images, PDFs, HTML in a sandbox) and
-  "Open on the Mac". Only files the session's own transcript names are served. Published
+  published or wrote, with a viewer (markdown rendered, code, images, PDFs, HTML in a sandbox,
+  Word documents as a page, Excel sheets and CSV as tables, anything else Quick Look knows as a
+  picture), "Show in Finder" and "Open on the Mac". Only files the session's own transcript names are served. Published
   artifacts link to claude.ai.
 - **Code blocks** in a conversation wrap their lines and have a Copy button; with **Run
   commands** on (Setup), a shell block also has Run: it runs on your Mac in the session's

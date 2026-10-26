@@ -10,7 +10,8 @@ import { isArchivedInApp, readDesktop } from "../lib/desktop"
 import { lastDigest } from "../lib/digest"
 import { detail as prDetail, lookup as prLookup, openThreads } from "../lib/github"
 import { json } from "../lib/http"
-import { latestJson, stream } from "../lib/live"
+import { latestJson, latestState, stream } from "../lib/live"
+import { documentHtml, quickLook, WORD, WORKBOOK, workbookHtml } from "../lib/office"
 import { readTasks } from "../lib/organizer"
 import { branchState, knownRepos, repoInfo } from "../lib/repo"
 import { commandFor, status as runStatus, suggest as suggestRun } from "../lib/runner"
@@ -28,8 +29,10 @@ import { wakeState } from "../lib/wake"
 // A session whose title holds every word comes first (its conversation may
 // mention them less than others that only talk about it), then the newest.
 async function searchResults(query: string) {
-  const [hits, desktop, sessions] = await Promise.all([search(query), readDesktop(), readSessions()])
+  const [hits, desktop, sessions, state] = await Promise.all([search(query), readDesktop(), readSessions(), latestState()])
   const onBoard = new Set(sessions.map(s => s.session_id))
+  // A name given on the board ("renamed") counts as the title too.
+  const named = new Map((state?.cards ?? []).map(c => [c.id, c]))
   const terms = fold(query).split(/\s+/).filter(t => t.length > 1)
   const inTitle = (r: { title: string }) => terms.every(t => fold(r.title).includes(t))
   const results = await Promise.all(
@@ -39,7 +42,7 @@ async function searchResults(query: string) {
       return {
         id: h.sessionId,
         hostId: app?.hostId ?? null,
-        title: app?.title || h.firstPrompt || h.sessionId,
+        title: named.get(h.sessionId)?.title || app?.title || h.firstPrompt || h.sessionId,
         repo: repo?.name ?? null,
         updatedAt: h.updatedAt,
         matches: h.matches,
@@ -59,6 +62,14 @@ async function searchResults(query: string) {
       id: app.cliId, hostId: app.hostId, title: app.title, repo: app.cwd ? (await repoInfo(app.cwd)).name : null,
       updatedAt: app.lastActivityAt ?? 0, matches: 0, snippet: "", role: null,
       isOnBoard: onBoard.has(app.cliId), isArchived: app.isArchived,
+    })
+  }
+  for (const c of named.values()) {
+    if (found.has(c.id) || !inTitle(c)) continue
+    found.add(c.id)
+    results.push({
+      id: c.id, hostId: c.hostId, title: c.title, repo: c.repo, updatedAt: c.lastActivity ?? 0, matches: 0, snippet: "", role: null,
+      isOnBoard: true, isArchived: c.isArchived,
     })
   }
   return results.sort((a, b) => Number(inTitle(b)) - Number(inTitle(a)) || b.updatedAt - a.updatedAt)
@@ -148,12 +159,22 @@ async function sessionRead(id: string, what: string, url: URL) {
       return json({ files: await sessionFiles(group?.ids ?? [id]) })
     // One of its files: what it is (fileinfo), then its bytes (file).
     case "fileinfo":
-    case "file": {
+    case "file":
+    case "filepreview": {
       const file = await sessionFile(group?.ids ?? [id], url.searchParams.get("path") ?? "", group ? [group.lead.cwd, group.root] : [])
       if (!file) return json({ error: "This session does not name that file, or it is gone" }, 404)
       if (what === "fileinfo") return json(file)
       if (!file.isViewable) return json({ error: "Too large to show here: open it on the Mac" }, 413)
-      return viewable(file.path, file.ext)
+      if (what === "file") return viewable(file.path, file.ext)
+      // What the browser cannot show itself: a page, tables or a picture.
+      try {
+        const sandboxed = { "content-type": "text/html; charset=utf-8", "content-security-policy": "sandbox", "x-content-type-options": "nosniff" }
+        if (WORD.test(file.ext)) return new Response(await documentHtml(file.path), { headers: sandboxed })
+        if (WORKBOOK.test(file.ext)) return new Response(await workbookHtml(file.path), { headers: sandboxed })
+        return new Response(await quickLook(file.path), { headers: { "content-type": "image/png", "x-content-type-options": "nosniff" } })
+      } catch (err) {
+        return json({ error: (err as Error).message }, 422)
+      }
     }
     case "tasks": {
       await refreshLinks()

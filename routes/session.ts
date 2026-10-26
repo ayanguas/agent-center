@@ -159,12 +159,13 @@ export async function handleSession(id: string, action: string, body: Record<str
       const res = await openInClient(id)
       return json(res, res.ok || !res.error ? 200 : 409)
     }
-    // One of the session's files in its own app on the Mac (Word, Excel…).
+    // One of the session's files in its own app on the Mac (Word, Excel…),
+    // or shown in Finder (reveal).
     case "openfile": {
       const group = groupOf(id)
       const file = await sessionFile(group?.ids ?? [id], String(body.path ?? ""), group ? [group.lead.cwd, group.root] : [])
       if (!file) return json({ error: "This session does not name that file, or it is gone" }, 404)
-      const opened = (await Bun.spawn(["/usr/bin/open", file.path]).exited) === 0
+      const opened = (await Bun.spawn(["/usr/bin/open", ...(body.reveal ? ["-R"] : []), file.path]).exited) === 0
       return json(opened ? { ok: true } : { error: "macOS could not open it" }, opened ? 200 : 500)
     }
   }
