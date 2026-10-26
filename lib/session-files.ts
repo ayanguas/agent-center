@@ -129,3 +129,13 @@ export async function sessionFile(ids: string[], raw: string, cwds: string[]) {
   if (!info?.isFile()) return null
   return { path, name: basename(path), size: info.size, ext: extname(path).slice(1).toLowerCase(), isViewable: info.size <= MAX_VIEW_BYTES }
 }
+
+// What the session wrote or edited since `since`, but the files every
+// session touches by design (Claude's notes in ~/.claude, temporary files,
+// the task lists): for telling when two sessions edit the same file.
+const SHARED_BY_DESIGN = /^(?:\/private)?\/tmp\/|\/\.claude\/|\/TASKS\.md$|\/organizer\/inbox\.md$/
+export async function writtenSince(ids: string[], since: number) {
+  return [...(await refsOf(ids)).values()]
+    .filter(f => f.source === "written" && f.at >= since && !SHARED_BY_DESIGN.test(f.path))
+    .map(f => f.path)
+}

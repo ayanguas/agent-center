@@ -16,6 +16,7 @@ import { readTasks } from "./organizer"
 import { progressOf } from "./plan"
 import { prUrlsIn } from "./prs"
 import { repoInfo } from "./repo"
+import { writtenSince } from "./session-files"
 import { isOrganizerOn } from "./setup"
 import { summary as runSummary } from "./runner"
 import { cleanPrompt, readSessions, type Session } from "./sessions"
@@ -229,6 +230,26 @@ async function cardOf(
 
 export type Card = NonNullable<Awaited<ReturnType<typeof cardOf>>>
 
+// Two open sessions that may step on each other: both edited the same files
+// in the last 6 hours, or both work right now in the same folder.
+const OVERLAP_MS = 6 * 3600_000
+export type Overlap = { id: string; title: string; files: string[]; isSameFolder: boolean }
+async function withOverlaps<C extends { id: string; title: string; cwd: string; column: string }>(cards: C[], groupsNow: Map<string, Group>, now: number) {
+  const written = new Map(
+    await Promise.all(cards.map(async c => [c.id, new Set(await writtenSince(groupsNow.get(c.id)?.ids ?? [c.id], now - OVERLAP_MS).catch(() => []))] as const)),
+  )
+  return cards.map(c => {
+    const overlaps: Overlap[] = []
+    for (const other of cards) {
+      if (other.id === c.id) continue
+      const files = [...written.get(c.id)!].filter(f => written.get(other.id)!.has(f))
+      const isSameFolder = c.column === "working" && other.column === "working" && c.cwd === other.cwd
+      if (files.length || isSameFolder) overlaps.push({ id: other.id, title: other.title, files, isSameFolder })
+    }
+    return { ...c, overlaps }
+  })
+}
+
 export async function snapshot() {
   const now = Date.now()
   const organizer = await isOrganizerOn()
@@ -248,7 +269,7 @@ export async function snapshot() {
     .sort((a, b) => b.lastActivity - a.lastActivity)
     .map(c => ({ ...c, memory: memoryOf(next.get(c.id)?.ids ?? [c.id]) }))
   const done = cards.filter(c => c.column === "done").slice(0, DONE_SHOWN)
-  const visible = [...cards.filter(c => c.column !== "done"), ...done]
+  const visible = [...(await withOverlaps(cards.filter(c => c.column !== "done"), next, now)), ...done.map(c => ({ ...c, overlaps: [] as Overlap[] }))]
 
   const repos = new Map<string, { root: string; name: string; count: number }>()
   for (const c of visible) {

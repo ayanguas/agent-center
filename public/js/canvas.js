@@ -4,7 +4,7 @@
 // press ✓) to mark it done, lift it back up to reopen it. By default the
 // canvas fits the window, drawn smaller when it must; zoomed in, it scrolls.
 import { html, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "../vendor/preact-htm.js"
-import { Actions, BackgroundChip, Context, MEMORY_WARN, MemoryChip, NewBadge, PendingChip, PrChip, StateIcon, UsageMeter, ageText, onOpenKey, stateOf, urgencyOf } from "./components.js"
+import { Actions, BackgroundChip, Context, MEMORY_WARN, MemoryChip, NewBadge, OverlapChip, PendingChip, PrChip, StateIcon, UsageMeter, ageText, onOpenKey, stateOf, urgencyOf } from "./components.js"
 import { CARD_H, CARD_W, ENTRY, GRID, dragHandler, layout, newZone, onCanvas, snap } from "./canvas-layout.js"
 import { Note, follow, keyOf, newNote } from "./canvas-notes.js"
 import { Ctx } from "./ctx.js"
@@ -136,7 +136,8 @@ function CanvasCard({ card, at, scale, onDropped, z, isPicked = false, onPick, g
       ${card.pinned && html`<span class="pin" title="Pinned"><${Icon} name="star" size=${12} /></span>`}
     </div>
     ${!isDone && html`<${Context} card=${card} lines=${2} />`}
-    ${(card.prs?.length > 0 || card.taskCount > 0 || card.bridge?.pending > 0 || card.usage || card.run || card.background?.length || card.memory?.total >= MEMORY_WARN) && html`<div class="cchips">
+    ${(card.prs?.length > 0 || card.taskCount > 0 || card.bridge?.pending > 0 || card.usage || card.run || card.background?.length || card.memory?.total >= MEMORY_WARN || card.overlaps?.length) && html`<div class="cchips">
+      <${OverlapChip} card=${card} />
       <${BackgroundChip} card=${card} />
       <${MemoryChip} card=${card} />
       <${RunChip} card=${card} />

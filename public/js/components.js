@@ -199,6 +199,7 @@ export function Meta({ card }) {
   return html`<div class="meta">
     ${card.isLaunching && html`<span class="tag tone-work" title="The first turn runs headless; open it in Claude when it ends">headless</span>`}
     ${card.state === "permission" && card.column === "asking" && html`<span class="tag tone-bad">needs approval</span>`}
+    <${OverlapChip} card=${card} />
     <${BackgroundChip} card=${card} />
     <${MemoryChip} card=${card} />
     <${RunChip} card=${card} />
@@ -276,6 +277,21 @@ export function Actions({ card, compact = false }) {
       : html`<button class="icon-btn" title="Mark as done (E)" onClick=${stop(() => ui.act(card, "done"))}>
           <${Icon} name="check" size=${15} /></button>`}
   </div>`
+}
+
+// Two open sessions that may step on each other (lib/snapshot.ts): the same
+// files edited in the last hours, or both working in one folder. A click
+// opens the other one.
+export function OverlapChip({ card }) {
+  const ui = useContext(Ctx)
+  const list = card.overlaps ?? []
+  if (!list.length) return null
+  const one = list[0]
+  const label = list.length > 1 ? `${list.length} sessions overlap`
+    : one.files.length ? `${one.files.length} ${one.files.length === 1 ? "file" : "files"} with ${one.title}` : `Same folder as ${one.title}`
+  const title = list.map(o => `• ${o.title}: ${[o.isSameFolder && "working in the same folder", o.files.length && `edited ${o.files.map(f => f.split("/").pop()).join(", ")}`].filter(Boolean).join("; ")}`).join("\n")
+  return html`<button class="tag overlap-chip" title=${`It may step on another session:\n${title}\n\nClick to open it`}
+    onClick=${e => (e.stopPropagation(), ui.openReader(one.id))}><${Icon} name="alert" size=${12} /><span>${label}</span></button>`
 }
 
 // Unread: "New", or what it waits for when that is new (a question, an approval).

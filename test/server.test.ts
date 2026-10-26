@@ -63,7 +63,19 @@ beforeAll(async () => {
     { type: "assistant", uuid: "h1", timestamp: new Date(now - 5000).toISOString(), message: { role: "assistant", content: [launch] } },
     { type: "user", uuid: "h2", timestamp: new Date(now - 4000).toISOString(), message: { role: "user", content: [{ type: "tool_result", tool_use_id: "toolu_h1", content: "Async agent launched. agentId: b1" }] } },
     { type: "api-request-blob", sessionId: HELPER, message: { role: "assistant", content: [launch] } },
+    // It also edits a file the watcher session edits.
+    { type: "assistant", uuid: "h3", cwd: home, timestamp: new Date(now - 3000).toISOString(), message: { role: "assistant", content: [
+      { type: "tool_use", id: "toolu_h3", name: "Edit", input: { file_path: join(home, "shared.ts") } },
+      { type: "tool_use", id: "toolu_h4", name: "Write", input: { file_path: join(home, ".claude", "notes.md") } },
+    ] } },
   ]
+  const watcherRows = [
+    { type: "assistant", uuid: "w1", cwd: home, timestamp: new Date(now - 2000).toISOString(), message: { role: "assistant", content: [
+      { type: "tool_use", id: "toolu_w1", name: "Write", input: { file_path: join(home, "shared.ts") } },
+      { type: "tool_use", id: "toolu_w2", name: "Write", input: { file_path: join(home, ".claude", "notes.md") } },
+    ] } },
+  ]
+  await writeFile(join(home, ".claude", "projects", "demo", `${WATCHER}.jsonl`), watcherRows.map(r => JSON.stringify(r)).join("\n") + "\n")
   await writeFile(join(home, ".claude", "projects", "demo", `${HELPER}.jsonl`), helperRows.map(r => JSON.stringify(r)).join("\n") + "\n")
   // The dev-server session sent a report and published a page.
   await writeFile(join(home, "report.md"), "# Zebra report\n\nAll good.\n")
@@ -167,6 +179,15 @@ describe("board", () => {
     const helper = state.cards.find((c: any) => c.id === HELPER)
     expect(helper.column).toBe("working")
     expect(helper.background.map((t: any) => t.id)).toEqual(["b1"])
+  })
+
+  test("tells two open sessions that edit the same file, not one every session edits", async () => {
+    const state = await jsonOf(fetch(`${base()}/api/state`))
+    const helper = state.cards.find((c: any) => c.id === HELPER)
+    const watcher = state.cards.find((c: any) => c.id === WATCHER)
+    expect(helper.overlaps.map((o: any) => [o.id, o.files])).toEqual([[WATCHER, [join(home, "shared.ts")]]])
+    expect(watcher.overlaps.map((o: any) => o.id)).toEqual([HELPER])
+    expect(state.cards.find((c: any) => c.id === ID).overlaps).toEqual([])
   })
 
   test("reads the conversation", async () => {
@@ -284,6 +305,25 @@ describe("running a command from a shell block", () => {
 })
 
 describe("memory", () => {
+  test("never counts nor stops what another (unknown) session runs", async () => {
+    // A `claude` of a session this board does not know, with an idle child.
+    const bin = join(home, "bin")
+    await mkdir(bin, { recursive: true })
+    await writeFile(join(bin, "claude"), "#!/bin/sh\nsleep 120 &\nwait\n", { mode: 0o755 })
+    const stranger = Bun.spawn([join(bin, "claude"), "--resume=abcdefab-0000-4000-8000-000000000000"])
+    try {
+      await Bun.sleep(2500) // two readings at least
+      const state = await jsonOf(fetch(`${base()}/api/state`))
+      expect(JSON.stringify(state.cards.map((c: any) => c.memory))).not.toContain(String(stranger.pid))
+      await post("/api/memory/stopforgotten")
+      await Bun.sleep(300)
+      expect(() => process.kill(stranger.pid, 0)).not.toThrow()
+    } finally {
+      stranger.kill()
+      Bun.spawn(["/usr/bin/pkill", "-f", "sleep 120"]) // its child
+    }
+  })
+
   test("counts what a session left running, and stops only that", async () => {
     // A command a session left behind, as `( … &)` leaves it: no parent but
     // launchd, and the session id in its command line.
