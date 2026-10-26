@@ -57,6 +57,7 @@ function App() {
   const toggleSpeech = () => {
     const next = speech.mode === "off" ? { ...speech, mode: speech.lastMode ?? "all" } : { ...speech, mode: "off", lastMode: speech.mode }
     setSpeech(next)
+    if (next.mode === "off") void post("/api/speak/stop") // and quiet now
     toast(next.mode === "off" ? "Read aloud off" : `Read aloud on: ${next.mode === "all" ? "every session" : "only sessions with the bell"}`)
   }
   // Sessions you asked to hear about once (the bell on a card): a chime, a

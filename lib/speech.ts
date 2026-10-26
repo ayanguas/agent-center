@@ -114,6 +114,8 @@ const SAMPLE = {
 
 let queue = Promise.resolve()
 let waiting = 0
+let speaking: ReturnType<typeof Bun.spawn> | null = null
+let generation = 0 // a stop skips everything queued before it
 const spoken = new Set<string>()
 
 function say(text: string, voice: Voice, rate: unknown) {
@@ -122,9 +124,27 @@ function say(text: string, voice: Voice, rate: unknown) {
   const r = Number(rate)
   const args = [...(voice.name !== SYSTEM ? ["-v", voice.name] : []), ...(Number.isFinite(r) && r > 0 ? ["-r", String(Math.round(Math.min(RATES.max, Math.max(RATES.min, r))))] : [])]
   waiting++
-  // The text goes in on stdin: one starting with "-" is never an option.
-  queue = queue.then(() => exec(["/usr/bin/say", ...args, "-f", "-"], { input: text, timeoutMs: 120_000 })).then(() => void waiting--)
+  const gen = generation
+  queue = queue
+    .then(async () => {
+      if (gen !== generation) return
+      // The text goes in on stdin: one starting with "-" is never an option.
+      const proc = (speaking = Bun.spawn(["/usr/bin/say", ...args, "-f", "-"], { stdin: new Blob([text]), stdout: "ignore", stderr: "ignore" }))
+      const timer = setTimeout(() => proc.kill(), 120_000)
+      await proc.exited
+      clearTimeout(timer)
+      if (speaking === proc) speaking = null
+    })
+    .catch(() => {})
+    .finally(() => void waiting--)
   return true
+}
+
+// Silence: what it says now stops, and what waits is dropped.
+export function stopSpeaking() {
+  generation++
+  speaking?.kill()
+  speaking = null
 }
 
 // A session's turn ended (or it asks): its recap, read once. Answers what
