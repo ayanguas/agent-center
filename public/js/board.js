@@ -1,12 +1,11 @@
 // The list views: the board (one column per state, or one lane per repo, with
-// drag and drop between columns), the inbox (one list grouped by state) and
-// the search results. A click, or Enter on a focused card or row, opens the
-// conversation.
+// drag and drop between columns) and the inbox (one list grouped by state).
+// A click, or Enter on a focused card or row, opens the conversation.
 import { html, useContext, useState } from "../vendor/preact-htm.js"
 import { Actions, Context, Meta, NewBadge, RepoIcon, RepoTag, StateIcon, ageText, onOpenKey, urgencyOf } from "./components.js"
 import { Ctx } from "./ctx.js"
 import { Icon } from "./icons.js"
-import { COLUMNS, STATES, ago, hue, keep, load, plain } from "./util.js"
+import { COLUMNS, STATES, hue, keep, load } from "./util.js"
 
 // ---------- board ----------
 
@@ -220,44 +219,3 @@ export function Inbox({ cards, showDone }) {
   </div>`
 }
 
-// ---------- search ----------
-
-export function SearchResults({ query, results }) {
-  const ui = useContext(Ctx)
-  if (!results) return html`<div class="results"><p class="muted">Searching…</p></div>`
-  const terms = query.toLowerCase().split(/\s+/).filter(t => t.length > 1)
-  const mark = text => {
-    const parts = []
-    let rest = text
-    const re = new RegExp(`(${terms.map(t => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})`, "i")
-    while (terms.length && rest) {
-      const m = rest.match(re)
-      if (!m) break
-      parts.push(rest.slice(0, m.index), html`<mark>${m[0]}</mark>`)
-      rest = rest.slice(m.index + m[0].length)
-    }
-    parts.push(rest)
-    return parts
-  }
-  return html`<div class="results">
-    <p class="muted">${results.length ? `${results.length} ${results.length === 1 ? "conversation" : "conversations"}` : "No results"}</p>
-    ${results.map(
-      r => html`<div key=${r.id} class=${`row result ${ui.selected === r.id ? "selected" : ""} ${ui.reader?.id === r.id ? "reading" : ""}`}
-        data-id=${r.id} tabindex="0" onClick=${() => ui.openReader(r.id)} onKeyDown=${onOpenKey(() => ui.openReader(r.id))}>
-        <div class="row-main">
-          <div class="row-line">
-            ${r.repo && html`<${RepoTag} name=${r.repo} />`}
-            <span class="row-title">${plain(r.title)}</span>
-            ${r.isOnBoard && html`<span class="tag">in the inbox</span>`}
-            ${r.isArchived && html`<span class="tag">archived</span>`}
-          </div>
-          ${r.snippet && html`<p class="snippet">${r.role === "user" ? "» " : ""}${mark(r.snippet)}</p>`}
-        </div>
-        <span class="tag">${r.matches ? `${r.matches} ${r.matches === 1 ? "message" : "messages"}` : "its title"}</span>
-        <span class="age">${ago(r.updatedAt, ui.now)}</span>
-        <div class="actions"><button class="icon-btn" title="Open in Claude" onClick=${e => (e.stopPropagation(), ui.launch(r.id))}>
-          <${Icon} name="external" size=${15} /></button></div>
-      </div>`,
-    )}
-  </div>`
-}

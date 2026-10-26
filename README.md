@@ -53,7 +53,8 @@ sessions through a small Claude Code mod, and keeps its own state in a folder of
 - **Context and cost** per session, background work running now, the task list of the current
   turn, unread marks, urgency colours, macOS notifications and a Dock badge when a session asks, and
   an optional chime when a session finishes or asks (heard while you look at the board too).
-- **Search** every conversation you ever had (`/` or `⌘K`).
+- **Search** every conversation you ever had (`/` or `⌘K`), archived ones included, in a palette
+  as in Claude desktop: tabs, the words marked in the title and a quote, the keyboard to choose.
 - **Tasks** (optional): a markdown task list per project that Claude keeps for you, shown on each
   session.
 

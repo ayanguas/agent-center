@@ -1,6 +1,6 @@
 // Agent Center front end: state, live data, keyboard, and the layout.
 import { html, render, useCallback, useEffect, useMemo, useRef, useState } from "../vendor/preact-htm.js"
-import { Board, Inbox, SearchResults } from "./board.js"
+import { Board, Inbox } from "./board.js"
 import { Canvas } from "./canvas.js"
 import { canvasOrder } from "./canvas-layout.js"
 import { newNote } from "./canvas-notes.js"
@@ -11,6 +11,7 @@ import { Icon } from "./icons.js"
 import { useFlip } from "./motion.js"
 import { Reader } from "./reader.js"
 import { RunDialog } from "./run.js"
+import { SearchPalette } from "./search.js"
 import { Sidebar } from "./sidebar.js"
 import { chime } from "./sound.js"
 import { Toasts } from "./toasts.js"
@@ -65,8 +66,8 @@ function App() {
   const [shown, setShown] = useState(null)
   const [parkMenu, setParkMenu] = useState(null)
   const [dragging, setDragging] = useState(null)
-  const [query, setQuery] = useState("")
-  const [results, setResults] = useState(null)
+  const [isSearching, setSearching] = useState(false) // the search palette is open
+  const [opened, setOpened] = useState(null) // the search result last opened (a session not on the board)
   const [toasts, setToasts] = useState([])
   const [dialog, setDialog] = useState(null) // "new" | "help" | "digest"
   const [runFor, setRunFor] = useState(null) // the card whose "Run" window is open
@@ -99,10 +100,9 @@ function App() {
   const settleTimer = useRef(null)
   const contentRef = useRef()
   const composerFocus = useRef(null)
-  const searchBox = useRef()
 
   // Choosing a view (the sidebar, keys 1 2 3) also leaves a search.
-  const setView = v => (setViewRaw(v), keep("view", v), setDrawingZone(false), setQuery(""))
+  const setView = v => (setViewRaw(v), keep("view", v), setDrawingZone(false))
   const setRepoFilter = r => (setRepoFilterRaw(r), keep("repoFilter", r), setSideOpen(false))
   const setShowDone = v => (setShowDoneRaw(v), keep("showDone", v))
   const setGroupBy = v => (setGroupByRaw(v), keep("groupBy", v))
@@ -235,8 +235,8 @@ function App() {
   }, [data])
 
   const order = useMemo(
-    () => (query ? (results ?? []).map(r => ({ id: r.id })) : walkOrder(view, cards, showDone, groupBy, data?.repos ?? [])),
-    [query, results, view, cards, showDone, groupBy, data],
+    () => walkOrder(view, cards, showDone, groupBy, data?.repos ?? []),
+    [view, cards, showDone, groupBy, data],
   )
 
   const wasOpen = useRef(false)
@@ -261,7 +261,7 @@ function App() {
 
   // Cards travel when they change place; one that leaves flies to where it
   // went: the "Done" button, a folded group, or fades if archived.
-  useFlip(contentRef, `${view}|${isNarrow}|${groupBy}|${repoFilter}|${query}|${showDone}|${!!data}`, id => {
+  useFlip(contentRef, `${view}|${isNarrow}|${groupBy}|${repoFilter}|${showDone}|${!!data}`, id => {
     // With what was just done here (archived, done…), ahead of the server.
     const card = cards.find(c => c.id === id) ?? data?.cards.find(c => c.id === id)
     return card ? card.column : null
@@ -274,18 +274,6 @@ function App() {
     document.title = asking ? `(${asking}) Agent Center` : unread ? `• Agent Center` : "Agent Center"
     if (navigator.setAppBadge) (asking ? navigator.setAppBadge(asking) : navigator.clearAppBadge()).catch(() => {})
   }, [data])
-
-  // ---------- search ----------
-  useEffect(() => {
-    if (!query.trim()) return setResults(null)
-    setResults(null)
-    let alive = true
-    const timer = setTimeout(async () => {
-      const res = await get(`/api/search?q=${encodeURIComponent(query.trim())}`)
-      if (alive) setResults(res?.results ?? [])
-    }, 220)
-    return () => ((alive = false), clearTimeout(timer))
-  }, [query])
 
   // ---------- actions ----------
   const dismissToast = id => setToasts(ts => ts.filter(t => t.id !== id))
@@ -462,27 +450,23 @@ function App() {
   // The handler is added once and reads the newest state from a ref, so two
   // keys pressed between renders both see what the first one did.
   const latest = useRef({})
-  latest.current = { dialog, query, parkMenu, reader, selected, cards, order, act, launch, openReader }
+  latest.current = { dialog, isSearching, parkMenu, reader, selected, cards, order, act, launch, openReader }
   useEffect(() => {
     const onKey = e => {
-      const { dialog, query, parkMenu, reader, selected, cards, order, act, launch, openReader } = latest.current
-      if (dialog) return
+      const { dialog, isSearching, parkMenu, reader, selected, cards, order, act, launch, openReader } = latest.current
+      if (dialog || isSearching) return // the palette handles its own keys
       const typing = isTyping(e.target)
       const cmdK = (e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k"
       // "?" arrives as Shift+/ on some layouts and drivers.
       if (!typing && (e.key === "?" || (e.code === "Slash" && e.shiftKey))) return (e.preventDefault(), setDialog("help"))
       if (cmdK || (e.key === "/" && !typing)) {
         e.preventDefault()
-        searchBox.current?.focus()
-        searchBox.current?.select()
+        setSearching(true)
         return
       }
       if (e.key === "Escape") {
-        if (typing) {
-          if (e.target === searchBox.current && query) setQuery("")
-          e.target.blur()
-        } else if (parkMenu) setParkMenu(latest.current.parkMenu = null)
-        else if (query) setQuery((latest.current.query = ""))
+        if (typing) e.target.blur()
+        else if (parkMenu) setParkMenu(latest.current.parkMenu = null)
         else if (reader) (setReader((latest.current.reader = null)), setSelected((latest.current.selected = null)))
         else setSelected((latest.current.selected = null))
         return
@@ -595,11 +579,11 @@ function App() {
     registerComposer: fn => (composerFocus.current = fn),
   }
   const readerCard = shown && data?.cards.find(c => c.id === shown.id)
-  const readerResult = shown && results?.find(r => r.id === shown.id)
+  const readerResult = shown && opened?.id === shown.id ? opened : null
   const repoName = repoFilter && data?.repos.find(r => r.root === repoFilter)?.name
 
   return html`<${Ctx.Provider} value=${ui}>
-    <div class=${`app ${reader ? "with-reader" : ""} ${view === "canvas" && !query ? "on-canvas" : ""} ${isSideOpen ? "side-open" : ""} ${dragging ? "is-dragging" : ""}`}
+    <div class=${`app ${reader ? "with-reader" : ""} ${view === "canvas" ? "on-canvas" : ""} ${isSideOpen ? "side-open" : ""} ${dragging ? "is-dragging" : ""}`}
       style=${`--reader-w:${readerWidth}px`}>
       ${data ? html`<${Sidebar} data=${data} repoFilter=${repoFilter} view=${view} connected=${connected} notify=${notify} sound=${sound} />`
         : html`<aside class="sidebar"><div class="brand"><span class="logo"><i></i><i></i><i></i></span>Agent Center</div></aside>`}
@@ -607,22 +591,20 @@ function App() {
       <main class="main">
         <header class="topbar">
           <button class="icon-btn only-narrow" onClick=${() => setSideOpen(o => !o)} title="Menu"><${Icon} name="sidebar" /></button>
-          <h1>${query ? "Search" : { board: "Board", canvas: "Canvas" }[view] ?? "Inbox"}${repoName && !query && html`<button class="crumb" onClick=${() => setRepoFilter(null)}
+          <h1>${{ board: "Board", canvas: "Canvas" }[view] ?? "Inbox"}${repoName && html`<button class="crumb" onClick=${() => setRepoFilter(null)}
             title="You only see this repo. Click to see all">${repoName}<${Icon} name="x" size=${11} /></button>`}</h1>
-          <label class="search">
-            <${Icon} name="search" size=${15} />
-            <input ref=${searchBox} type="search" placeholder="Search…" title="Search all conversations" value=${query}
-              onInput=${e => setQuery(e.target.value)} />
-            ${!query && html`<span class="search-keys"><${Kbd}>⌘K<//></span>`}
-          </label>
-          ${view === "board" && !query && html`<div class="segmented" role="group" aria-label="Group">
+          <button class="search" onClick=${() => setSearching(true)} title="Search all conversations (⌘K or /)">
+            <${Icon} name="search" size=${15} /><span class="search-ph">Search…</span>
+            <span class="search-keys"><${Kbd}>⌘K<//></span>
+          </button>
+          ${view === "board" && html`<div class="segmented" role="group" aria-label="Group">
             <button class=${groupBy !== "repo" ? "on" : ""} onClick=${() => setGroupBy("none")} title="No grouping (G)">Columns</button>
             <button class=${groupBy === "repo" ? "on" : ""} onClick=${() => setGroupBy("repo")} title="Lanes per repo (G)">By repo</button>
           </div>`}
-          ${view === "canvas" && !query && html`<button class=${`btn ${isDrawingZone ? "on" : ""}`} aria-pressed=${isDrawingZone}
+          ${view === "canvas" && html`<button class=${`btn ${isDrawingZone ? "on" : ""}`} aria-pressed=${isDrawingZone}
             title="Draw a named zone on the canvas to group cards (Esc cancels)" onClick=${() => setDrawingZone(!isDrawingZone)}>
             <${Icon} name="plus" size=${14} /><span class="lbl">Zone</span></button>`}
-          ${view === "canvas" && !query && html`<button class="btn" title="Add a note (or double-click the empty canvas)"
+          ${view === "canvas" && html`<button class="btn" title="Add a note (or double-click the empty canvas)"
             onClick=${() => post("/api/canvas/notes", { notes: [...(data?.notes ?? []), newNote(data?.notes ?? [])] })}>
             <${Icon} name="plus" size=${14} /><span class="lbl">Note</span></button>`}
           ${view !== "canvas" && html`<button class=${`btn ${showDone ? "on" : ""}`} data-fly="done" onClick=${() => setShowDone(!showDone)} title="Show done sessions">Done</button>`}
@@ -632,9 +614,7 @@ function App() {
         <div class="content" ref=${contentRef}>
           ${!data
             ? html`<div class="skeleton-rows">${[1, 2, 3, 4, 5].map(i => html`<i key=${i}></i>`)}</div>`
-            : query
-              ? html`<${SearchResults} query=${query} results=${results} />`
-              : view === "board"
+            : view === "board"
                 ? html`<${Board} cards=${cards} showDone=${showDone} groupBy=${groupBy} repos=${data.repos} />`
                 : view === "canvas"
                   ? html`<${Canvas} cards=${cards} zones=${data.zones ?? []} notes=${data.notes ?? []}
@@ -652,6 +632,8 @@ function App() {
       ${dialog === "new" && html`<${NewSession} initialRoot=${repoFilter} onClose=${() => setDialog(null)} />`}
       ${dialog === "help" && html`<${Help} onClose=${() => setDialog(null)} />`}
       ${dialog === "digest" && html`<${Digest} onClose=${() => setDialog(null)} />`}
+      ${isSearching && html`<${SearchPalette} cards=${data?.cards ?? []} onClose=${() => setSearching(false)}
+        onOpen=${r => (setOpened(r), openReader(r.id))} />`}
       ${dialog === "setup" && html`<${Setup} notify=${notify} sound=${sound} onClose=${() => (keep("setupSeen", true), setDialog(null))} />`}
       ${runFor && html`<${RunDialog} card=${runFor} onClose=${() => setRunFor(null)} />`}
     </div>
