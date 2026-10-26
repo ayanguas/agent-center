@@ -251,9 +251,9 @@ export function SearchResults({ query, results }) {
             ${r.isOnBoard && html`<span class="tag">in the inbox</span>`}
             ${r.isArchived && html`<span class="tag">archived</span>`}
           </div>
-          <p class="snippet">${r.role === "user" ? "» " : ""}${mark(r.snippet)}</p>
+          ${r.snippet && html`<p class="snippet">${r.role === "user" ? "» " : ""}${mark(r.snippet)}</p>`}
         </div>
-        <span class="tag">${r.matches} ${r.matches === 1 ? "message" : "messages"}</span>
+        <span class="tag">${r.matches ? `${r.matches} ${r.matches === 1 ? "message" : "messages"}` : "its title"}</span>
         <span class="age">${ago(r.updatedAt, ui.now)}</span>
         <div class="actions"><button class="icon-btn" title="Open in Claude" onClick=${e => (e.stopPropagation(), ui.launch(r.id))}>
           <${Icon} name="external" size=${15} /></button></div>

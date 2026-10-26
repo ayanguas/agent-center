@@ -174,6 +174,13 @@ describe("board", () => {
     expect(results.map((r: any) => r.id)).toContain(ID)
   })
 
+  test("puts a session whose title matches first, even if its messages never say it", async () => {
+    // "Demo session" is the desktop app's title for ID; no message holds those words.
+    const { results } = await jsonOf(fetch(`${base()}/api/search?q=${encodeURIComponent("demo session")}`))
+    expect(results[0]?.id).toBe(ID)
+    expect(results[0].matches).toBe(0)
+  })
+
   test("keeps the person's decisions in its own data folder", async () => {
     expect((await post(`/api/sessions/${ID}/rename`, { title: "Renamed" })).status).toBe(200)
     const board = JSON.parse(await readFile(join(data, "board.json"), "utf8"))

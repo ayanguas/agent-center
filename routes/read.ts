@@ -14,7 +14,7 @@ import { latestJson, stream } from "../lib/live"
 import { readTasks } from "../lib/organizer"
 import { branchState, knownRepos, repoInfo } from "../lib/repo"
 import { commandFor, status as runStatus, suggest as suggestRun } from "../lib/runner"
-import { search } from "../lib/search"
+import { fold, search } from "../lib/search"
 import { sessionFile, sessionFiles } from "../lib/session-files"
 import { setupStatus } from "../lib/setup"
 import { readSessions } from "../lib/sessions"
@@ -25,10 +25,14 @@ import { isReady as voiceReady } from "../lib/transcribe"
 import { uploadedFile } from "../lib/uploads"
 import { wakeState } from "../lib/wake"
 
+// A session whose title holds every word comes first (its conversation may
+// mention them less than others that only talk about it), then the newest.
 async function searchResults(query: string) {
   const [hits, desktop, sessions] = await Promise.all([search(query), readDesktop(), readSessions()])
   const onBoard = new Set(sessions.map(s => s.session_id))
-  return Promise.all(
+  const terms = fold(query).split(/\s+/).filter(t => t.length > 1)
+  const inTitle = (r: { title: string }) => terms.every(t => fold(r.title).includes(t))
+  const results = await Promise.all(
     hits.map(async h => {
       const app = desktop.byCli.get(h.sessionId)
       const repo = h.cwd ? await repoInfo(h.cwd) : null
@@ -40,12 +44,24 @@ async function searchResults(query: string) {
         updatedAt: h.updatedAt,
         matches: h.matches,
         snippet: h.snippet,
-        role: h.role,
+        role: h.role as "user" | "assistant" | null, // null: only its title matches
         isOnBoard: onBoard.has(h.sessionId),
         isArchived: !!app?.isArchived,
       }
     }),
   )
+  // A title the app gave can say what its conversation never does in so many words.
+  const found = new Set(results.map(r => r.id))
+  for (const app of desktop.byHost.values()) {
+    if (!app.cliId || found.has(app.cliId) || !app.title || !inTitle({ title: app.title })) continue
+    found.add(app.cliId)
+    results.push({
+      id: app.cliId, hostId: app.hostId, title: app.title, repo: app.cwd ? (await repoInfo(app.cwd)).name : null,
+      updatedAt: app.lastActivityAt ?? 0, matches: 0, snippet: "", role: null,
+      isOnBoard: onBoard.has(app.cliId), isArchived: app.isArchived,
+    })
+  }
+  return results.sort((a, b) => Number(inTitle(b)) - Number(inTitle(a)) || b.updatedAt - a.updatedAt)
 }
 
 // A file sent from the board. Pictures and PDFs open in the browser; anything
