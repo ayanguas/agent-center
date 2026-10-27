@@ -38,7 +38,9 @@ sessions through a small Claude Code mod, and keeps its own state in a folder of
   one wakes it in the background and delivers the message; the app you were using keeps the
   focus.
 - **Stop, mode, model.** Stop a running turn (`S`), switch the permission mode and the model of
-  a session from the reply box.
+  a session from the reply box. In a session running in Auto the mode change goes as your
+  message (Auto's classifier lets only the conversation change it); to a mode that asks less,
+  Claude desktop asks you to approve it.
 - **Changes and PRs.** Each session's diff against its base branch, with line comments sent
   back as one message, or side by side in VS Code's diff view, with the tree of changed files
   beside them; it follows the disk, so edits made by hand show too; its pull requests with checks, review state, unresolved comments and a
@@ -197,6 +199,10 @@ the block says, as Claude desktop's own Run does.
 
 Nothing deletes the files you send; the sidebar shows how much they take and opens the folder.
 Catch me up and new sessions run Claude Code itself (`claude -p`), with your account.
+
+New sessions start in Auto. Claude desktop gives a session it imports its own default mode, so
+for them to stay in Auto once they move into the app, set it in `~/.claude/settings.json`:
+`"permissions": { "defaultMode": "auto" }` (sessions you start in the app then start in Auto too).
 
 ## Configuration
 

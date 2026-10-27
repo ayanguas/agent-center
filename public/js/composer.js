@@ -274,6 +274,8 @@ function SessionSettings({ id, card, bridge }) {
   const change = async (key, value) => {
     const res = await post(`/api/sessions/${id}/settings`, { [key]: value })
     if (!res.body.ok) return ui.toast(res.body.error ?? "Could not request the change")
+    // A session in Auto changes its mode when the conversation asks: sent as a message.
+    if (res.body.messageId) return ui.toast("Sent as a message: in Auto, Claude changes the mode when the conversation asks")
     setAsked({ requestId: res.body.requestId, key, value })
     ui.toast(res.body.isOpen ? "Change sent: it applies as soon as the session is free" : "Change saved: it applies when the session opens")
   }

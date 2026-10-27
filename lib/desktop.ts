@@ -17,6 +17,7 @@ export type DesktopSession = {
   isArchived: boolean
   isStarred: boolean
   lastActivityAt: number | null
+  permissionMode: string | null
 }
 
 export type DesktopIndex = {
@@ -77,6 +78,7 @@ export async function readDesktop(): Promise<DesktopIndex> {
                 isArchived: !!raw.isArchived,
                 isStarred: !!raw.isStarred,
                 lastActivityAt: raw.lastActivityAt ?? null,
+                permissionMode: raw.permissionMode ?? null,
               },
             })
           }
