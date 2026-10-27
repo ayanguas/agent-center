@@ -883,6 +883,35 @@ export function Canvas({ cards, zones: savedZones, notes: savedNotes, isDrawingZ
     window.addEventListener("keyup", onKeyUp)
     return () => (f.removeEventListener("wheel", onWheel), window.removeEventListener("keydown", onKey), window.removeEventListener("keyup", onKeyUp))
   }, [])
+  // "Next up" (and anything else that names a card): the canvas zooms in to at
+  // least its real size and brings the card to the middle of what the
+  // conversation panel leaves free, and the card flashes once.
+  const focusCard = id => {
+    const p = pos[id]
+    const el = document.querySelector(`.ccard[data-id="${id}"]`)
+    if (!p || !el) return // done, archived, or folded away in a zone
+    const n = Math.min(MAX_ZOOM, Math.max(scale, 1))
+    const panel = document.querySelector(".reader-slot .reader")?.offsetWidth ?? 0
+    const cx = Math.max(view.w - panel, view.w * 0.4) / 2
+    const target = { x: p.x + CARD_W / 2, y: p.y + heightOf(id) / 2 }
+    if (Math.abs(n - scale) < 0.001) frame.current.scrollTo({ left: target.x * n - cx, top: target.y * n - view.h / 2, behavior: isCalm() ? "auto" : "smooth" })
+    else {
+      anchor.current = { ...target, cx, cy: view.h / 2 }
+      setZoom(n)
+    }
+    el.classList.remove("flash")
+    void el.offsetWidth // restart the animation
+    el.classList.add("flash")
+    setTimeout(() => el.classList.remove("flash"), 1600)
+  }
+  const focusNow = useRef(focusCard)
+  focusNow.current = focusCard
+  useEffect(() => {
+    const on = e => focusNow.current(e.detail)
+    window.addEventListener("canvas:focus", on)
+    return () => window.removeEventListener("canvas:focus", on)
+  }, [])
+
   // Zoomed in, dragging the empty canvas moves the view.
   const onBackground = e => {
     if (e.target !== e.currentTarget) return

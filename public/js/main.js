@@ -464,6 +464,8 @@ function App() {
     if (i !== -1 && waiting.length === 1) return toast("Nothing else waits for you")
     const next = waiting[(i + 1) % waiting.length]
     openReader(next.id)
+    // On the canvas, the canvas also goes to it (canvas.js).
+    window.dispatchEvent(new CustomEvent("canvas:focus", { detail: next.id }))
     setTimeout(() => composerFocus.current?.focus(), 150)
   }
 

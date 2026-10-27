@@ -1750,3 +1750,8 @@ button.file-chip { cursor: pointer; font: inherit; font-size: 12.5px; }
 .lod-far .ccard-top .state-ico { --size: calc(22px * min(var(--unscale), 1.8)) !important; }
 .lod-far .ccard-foot { font-size: calc(11.5px * min(var(--unscale), 1.8)); }
 .lod-far .zone-name { font-size: calc(13px * min(var(--unscale), 2.2)); }
+
+/* a card the canvas went to ("Next up"): one ring that fades */
+.ccard.flash { animation: flash 1.4s var(--ease-out) 1 !important; }
+@keyframes flash { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 70%, transparent); } 100% { box-shadow: 0 0 0 18px transparent; } }
+@media (prefers-reduced-motion: reduce) { .ccard.flash { animation: none !important; border-color: var(--accent); } }
