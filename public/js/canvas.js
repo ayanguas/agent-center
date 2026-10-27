@@ -4,17 +4,20 @@
 // press ✓) to mark it done, lift it back up to reopen it. By default the
 // canvas fits the window, drawn smaller when it must; zoomed in, it scrolls.
 import { html, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "../vendor/preact-htm.js"
-import { Actions, BackgroundChip, Context, MEMORY_WARN, MemoryChip, NewBadge, OverlapChip, PendingChip, PrChip, StateIcon, UsageMeter, ageText, onOpenKey, stateOf, urgencyOf } from "./components.js"
+import { Actions, BackgroundChip, Context, MemoryChip, OverlapChip, PendingChip, PrChip, StateIcon, UsageMeter, ageText, onOpenKey, stateOf, urgencyOf } from "./components.js"
 import { CARD_H, CARD_W, ENTRY, GRID, dragHandler, layout, newZone, onCanvas, snap } from "./canvas-layout.js"
 import { Note, follow, keyOf, newNote } from "./canvas-notes.js"
 import { Ctx } from "./ctx.js"
 import { Icon } from "./icons.js"
 import { RunChip } from "./run.js"
-import { hue, isTyping, keep, load, post } from "./util.js"
+import { hue, isTyping, keep, load, plain, post } from "./util.js"
 import { origins, quietly } from "./motion.js"
 
 const MAX_ZOOM = 1.5 // 150 % of the cards' real size
 const MIN_ZOOM = 0.4 // zoomed out: more room around, cards at 40 %
+// Semantic zoom: what a card shows depends on how big it is drawn. Far, only
+// its state and title, drawn larger; mid, also one line of context; near, all.
+const levelOf = scale => (scale < 0.62 ? "lod-far" : scale < 0.85 ? "lod-mid" : "lod-near")
 
 function hashOf(id) {
   let h = 0
@@ -78,7 +81,7 @@ const heightOf = id => heights.get(id) ?? CARD_H
 // `at` is where the card sits on the canvas; `onDropped(card, to, ev, el, d)`
 // gets the canvas point where it was let go. The canvas is drawn at `scale`,
 // so a pointer move of 10 px is 10 / scale canvas units.
-function CanvasCard({ card, at, scale, onDropped, z, isPicked = false, onPick, group }) {
+function CanvasCard({ card, at, scale, onDropped, z, isPicked = false, onPick, group, onHover }) {
   const ui = useContext(Ctx)
   const ref = useRef()
   useLayoutEffect(() => void (ref.current && heights.set(card.id, ref.current.offsetHeight)))
@@ -103,6 +106,7 @@ function CanvasCard({ card, at, scale, onDropped, z, isPicked = false, onPick, g
   }
   const onPointerDown = dragHandler({
     onStart: () => {
+      onHover?.(null)
       ref.current.classList.add("dragging")
       scroll = edgeScroller(paint)
       start = scroll.offset()
@@ -125,31 +129,55 @@ function CanvasCard({ card, at, scale, onDropped, z, isPicked = false, onPick, g
   return html`<article ref=${ref} data-id=${card.id}
     class=${`ccard ${isPicked ? "picked" : ""} state-${state} ${isDone ? "" : urgencyOf(card, ui.now)} ${ui.selected === card.id ? "selected" : ""} ${ui.reader?.id === card.id ? "reading" : ""} ${card.isUnread ? "unread" : ""} ${ui.parkMenu === card.id ? "raised" : ""}`}
     style=${`left:${at.left ?? at.x}px;top:${at.top ?? at.y}px;--hue:${hue(card.repo)};animation-delay:${delay}s${z ? `;--z:${z}` : ""}`}
-    tabindex="0" onPointerDown=${onPointerDown} onKeyDown=${onOpenKey(() => ui.openReader(card.id))}>
+    tabindex="0" onPointerDown=${onPointerDown} onKeyDown=${onOpenKey(() => ui.openReader(card.id))}
+    onPointerEnter=${e => e.pointerType === "mouse" && onHover?.(card.id, ref.current)} onPointerLeave=${() => onHover?.(null)}>
     <div class="ccard-top">
-      <${StateIcon} card=${card} size=${30} />
-      <div class="ccard-head">
-        <span class="ctitle">${card.title}</span>
-        <span class="csub"><span class="crepo">${card.repo}</span> · ${ageText(card, ui.now)}</span>
-      </div>
-      <${NewBadge} card=${card} />
+      <${StateIcon} card=${card} size=${22} />
+      <span class="ctitle" title=${card.title}>${card.title}</span>
       ${card.pinned && html`<span class="pin" title="Pinned"><${Icon} name="star" size=${12} /></span>`}
+      ${card.isUnread && html`<i class="cunread" title="New since you last looked"></i>`}
     </div>
     ${!isDone && html`<${Context} card=${card} lines=${2} />`}
-    ${(card.prs?.length > 0 || card.taskCount > 0 || card.bridge?.pending > 0 || card.usage || card.run || card.background?.length || card.memory?.total >= MEMORY_WARN || card.overlaps?.length) && html`<div class="cchips">
-      <${OverlapChip} card=${card} />
-      <${BackgroundChip} card=${card} />
-      <${MemoryChip} card=${card} />
-      <${RunChip} card=${card} />
-      ${card.prs?.map(pr => html`<${PrChip} key=${pr.url} pr=${pr} repo=${card.repo} cardId=${card.id} />`)}
-      ${card.taskCount > 0 && html`<button class="tag tasks" onClick=${e => (e.stopPropagation(), ui.openReader(card.id, "tasks"))}>
-        <${Icon} name="tasks" size=${12} />${card.taskCount} ${card.taskCount === 1 ? "task" : "tasks"}</button>`}
-      ${card.bridge?.pending > 0 && html`<${PendingChip} card=${card} />`}
-      <${UsageMeter} usage=${card.usage} />
-    </div>`}
-    ${!isDone && card.branch && html`<div class="ccard-more"><span class="branch">${card.branch}</span></div>`}
+    <footer class="ccard-foot">
+      <span class="crepo" title=${card.branch ? `${card.repo} · ${card.branch}` : card.repo}><i></i>${card.repo}</span>
+      <span class="cage">${ageText(card, ui.now)}</span>
+      ${!isDone && html`<span class="csignals">
+        <${OverlapChip} card=${card} />
+        <${BackgroundChip} card=${card} />
+        <${MemoryChip} card=${card} />
+        <${RunChip} card=${card} />
+        ${card.prs?.length === 1 && html`<${PrChip} pr=${card.prs[0]} repo=${card.repo} cardId=${card.id} />`}
+        ${card.prs?.length > 1 && html`<button class="tag" title=${card.prs.map(pr => `#${pr.number} ${pr.title}`).join("\n")}
+          onClick=${e => (e.stopPropagation(), ui.openReader(card.id, "prs"))}><${Icon} name="pr" size=${12} />${card.prs.length}</button>`}
+        ${card.taskCount > 0 && html`<button class="tag tasks" title=${`${card.taskCount} ${card.taskCount === 1 ? "task" : "tasks"}`}
+          onClick=${e => (e.stopPropagation(), ui.openReader(card.id, "tasks"))}><${Icon} name="tasks" size=${12} />${card.taskCount}</button>`}
+        ${card.bridge?.pending > 0 && html`<${PendingChip} card=${card} />`}
+        <${UsageMeter} usage=${card.usage} />
+      </span>`}
+    </footer>
     <${Actions} card=${card} compact />
   </article>`
+}
+
+// A card's preview, after a moment over it: what you asked last and the
+// whole of what it says now (the card cuts it to a line or two), beside the
+// card, at its real size whatever the zoom.
+const PEEK_DELAY = 450
+const PEEK_W = 340
+function Peek({ card, rect }) {
+  const ui = useContext(Ctx)
+  const now = card.column === "asking" ? card.ask : card.column === "working" ? card.progress?.current : card.recap
+  const p = card.progress
+  const panel = document.querySelector(".app.with-reader .reader-slot .reader")?.getBoundingClientRect().left ?? innerWidth
+  const left = rect.right + 12 + PEEK_W < panel ? rect.right + 12 : Math.max(8, rect.left - 12 - PEEK_W)
+  const top = Math.min(Math.max(8, rect.top), innerHeight - 260)
+  return html`<div class="peek" style=${`left:${left}px;top:${top}px;width:${PEEK_W}px`} role="tooltip">
+    <header><${StateIcon} card=${card} size=${20} /><b>${card.title}</b></header>
+    ${card.lastPrompt && html`<p class="peek-you"><span>You</span>${plain(card.lastPrompt)}</p>`}
+    ${now && html`<p class=${`peek-now ${card.column === "asking" ? "ask" : ""}`}>${plain(now)}</p>`}
+    ${p && card.column === "working" && html`<p class="peek-steps">Step ${Math.min(p.done + 1, p.total)} of ${p.total}</p>`}
+    <footer><span class="crepo" style=${`--hue:${hue(card.repo)}`}><i></i>${card.repo}</span>${card.branch && html`<span class="mono">${card.branch}</span>`}<span>${ageText(card, ui.now)}</span></footer>
+  </div>`
 }
 
 // Folding and unfolding a zone, and a card dropped on a folder, move only
@@ -387,6 +415,15 @@ export function Canvas({ cards, zones: savedZones, notes: savedNotes, isDrawingZ
     synced.current = savedNotes
   }, [JSON.stringify(savedNotes)])
   const [view, setView] = useState({ w: 0, h: 0 })
+  // The card under the mouse, once it stayed a moment: { id, rect }.
+  const [peek, setPeek] = useState(null)
+  const peekTimer = useRef(0)
+  const hover = (id, el) => {
+    clearTimeout(peekTimer.current)
+    if (!id) return setPeek(null)
+    peekTimer.current = setTimeout(() => el.isConnected && !el.classList.contains("dragging") && setPeek({ id, rect: el.getBoundingClientRect() }), PEEK_DELAY)
+  }
+  useEffect(() => () => clearTimeout(peekTimer.current), [])
   // Zoom: null fits the whole canvas in the window; a number draws it at that
   // scale, up to MAX_ZOOM, and the canvas scrolls. Kept in this browser.
   const [zoom, setZoomRaw] = useState(() => load("canvasZoom", null))
@@ -878,6 +915,35 @@ export function Canvas({ cards, zones: savedZones, notes: savedNotes, isDrawingZ
     window.addEventListener("keyup", onKeyUp)
     return () => (f.removeEventListener("wheel", onWheel), window.removeEventListener("keydown", onKey), window.removeEventListener("keyup", onKeyUp))
   }, [])
+  // "Next up" (and anything else that names a card): the canvas zooms in to at
+  // least its real size and brings the card to the middle of what the
+  // conversation panel leaves free, and the card flashes once.
+  const focusCard = id => {
+    const p = pos[id]
+    const el = document.querySelector(`.ccard[data-id="${id}"]`)
+    if (!p || !el) return // done, archived, or folded away in a zone
+    const n = Math.min(MAX_ZOOM, Math.max(scale, 1))
+    const panel = document.querySelector(".reader-slot .reader")?.offsetWidth ?? 0
+    const cx = Math.max(view.w - panel, view.w * 0.4) / 2
+    const target = { x: p.x + CARD_W / 2, y: p.y + heightOf(id) / 2 }
+    if (Math.abs(n - scale) < 0.001) frame.current.scrollTo({ left: target.x * n - cx, top: target.y * n - view.h / 2, behavior: isCalm() ? "auto" : "smooth" })
+    else {
+      anchor.current = { ...target, cx, cy: view.h / 2 }
+      setZoom(n)
+    }
+    el.classList.remove("flash")
+    void el.offsetWidth // restart the animation
+    el.classList.add("flash")
+    setTimeout(() => el.classList.remove("flash"), 1600)
+  }
+  const focusNow = useRef(focusCard)
+  focusNow.current = focusCard
+  useEffect(() => {
+    const on = e => focusNow.current(e.detail)
+    window.addEventListener("canvas:focus", on)
+    return () => window.removeEventListener("canvas:focus", on)
+  }, [])
+
   // Zoomed in, dragging the empty canvas moves the view.
   const onBackground = e => {
     if (e.target !== e.currentTarget) return
@@ -901,9 +967,9 @@ export function Canvas({ cards, zones: savedZones, notes: savedNotes, isDrawingZ
   }
 
   return html`<div class="canvas-wrap" ref=${wrap}>
-    <div class=${`canvas-frame ${isZoomed ? "zoomed" : ""}`} ref=${frame}>
+    <div class=${`canvas-frame ${isZoomed ? "zoomed" : ""}`} ref=${frame} onScroll=${() => peek && setPeek(null)}>
     <div class="canvas-sizer" style=${`width:${width * scale}px;height:${height * scale}px`}>
-    <div class="canvas-area col-canvas" style=${`width:${width}px;height:${height}px;transform:scale(${scale});--unscale:${1 / scale}`}
+    <div class=${`canvas-area col-canvas ${levelOf(scale)}`} style=${`width:${width}px;height:${height}px;transform:scale(${scale});--unscale:${1 / scale}`}
       onPointerDown=${onBackground}
       onDblClick=${e => {
         // A double click on the empty canvas leaves a note there.
@@ -927,7 +993,7 @@ export function Canvas({ cards, zones: savedZones, notes: savedNotes, isDrawingZ
           onChange=${next => saveNotes(notes.map(x => (x.id === next.id ? { ...x, w: next.w, h: next.h, color: next.color } : x)))}
           onText=${(note, text, opts) => saveNotes(notes.map(x => (x.id === note.id ? { ...x, text } : x)), opts)} />`,
       )}
-      ${seen.map(card => html`<${CanvasCard} key=${card.id} card=${card} at=${pos[card.id]} scale=${scale} onDropped=${dropped}
+      ${seen.map(card => html`<${CanvasCard} key=${card.id} card=${card} at=${pos[card.id]} scale=${scale} onDropped=${dropped} onHover=${hover}
         isPicked=${picked.has(`c:${card.id}`)} onPick=${isAdding => pick(`c:${card.id}`, isAdding)} group=${groupFor(`c:${card.id}`)} />`)}
       ${isDrawingZone && html`<div class="zone-draw" style=${`height:${doneTop}px`} onPointerDown=${startZone}></div>`}
       ${draft && html`<div class="zone zone-draft" style=${`left:${Math.min(draft.x0, draft.x1)}px;top:${Math.min(draft.y0, draft.y1)}px;width:${Math.abs(draft.x1 - draft.x0)}px;height:${Math.abs(draft.y1 - draft.y0)}px;--hue:${hue("New zone")}`}></div>`}
@@ -955,6 +1021,7 @@ export function Canvas({ cards, zones: savedZones, notes: savedNotes, isDrawingZ
       <span class="done-hint">Drop here to mark it as done</span>
       <span class="dock-chips">${done.map(card => html`<button key=${card.id} class="tag" onClick=${() => ui.openReader(card.id)}>${card.title}</button>`)}</span>
     </div>`}
+    ${peek && ui.reader?.id !== peek.id && cards.some(c => c.id === peek.id) && html`<${Peek} card=${cards.find(c => c.id === peek.id)} rect=${peek.rect} />`}
     ${isDrawingZone && !draft && html`<div class="zone-draw-hint">Drag to draw the zone · Esc to cancel</div>`}
     ${isMoreOpen && html`<${DoneList} cards=${moreDone} bottom=${(height - doneTop) * scale + 8} onClose=${() => setMoreOpen(false)} />`}
     <div class="zoom-ctl" title="Zoom: pinch on the trackpad or ⌘ + wheel · keys + − 0. Zooming out gives more room">

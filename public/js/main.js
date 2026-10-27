@@ -40,6 +40,10 @@ function walkOrder(view, cards, showDone, groupBy, repos) {
   ]
 }
 
+// The reader's tabs that need the whole width: they open as a workspace.
+const WORKSPACES = new Set(["changes", "code", "files"])
+const SIDE_W = { full: 256, slim: 60 } // the sidebar's width (styles.css --side-w)
+
 function App() {
   const [data, setData] = useState(null)
   const [connected, setConnected] = useState(false)
@@ -100,6 +104,9 @@ function App() {
   // after the expand button, else the default. The same for every tab.
   const [readerW, setReaderWRaw] = useState(() => load("readerW", null))
   const [isWide, setWide] = useState(false)
+  // The sidebar folded to icons, for the canvas's room. Kept in this browser.
+  const [isSlim, setSlimRaw] = useState(() => load("sideSlim", false))
+  const toggleSlim = () => setSlimRaw(s => (keep("sideSlim", !s), !s))
   const [needsRoom, setNeedsRoom] = useState(false) // a view inside asks for width (Changes side by side)
   const [vw, setVw] = useState(window.innerWidth)
   useEffect(() => {
@@ -457,6 +464,8 @@ function App() {
     if (i !== -1 && waiting.length === 1) return toast("Nothing else waits for you")
     const next = waiting[(i + 1) % waiting.length]
     openReader(next.id)
+    // On the canvas, the canvas also goes to it (canvas.js).
+    window.dispatchEvent(new CustomEvent("canvas:focus", { detail: next.id }))
     setTimeout(() => composerFocus.current?.focus(), 150)
   }
 
@@ -536,6 +545,8 @@ function App() {
       if (e.key === "Escape") {
         if (typing) e.target.blur()
         else if (parkMenu) setParkMenu(latest.current.parkMenu = null)
+        // A workspace (Changes, Code, Files) goes back to the conversation first.
+        else if (reader && WORKSPACES.has(reader.tab)) setReader((latest.current.reader = { ...reader, tab: "chat" }))
         else if (reader) (setReader((latest.current.reader = null)), setSelected((latest.current.selected = null)))
         else setSelected((latest.current.selected = null))
         return
@@ -606,9 +617,12 @@ function App() {
   }, [])
 
   // ---------- the panel's width ----------
+  // The conversation is a side panel; Changes, Code and Files are workspaces:
+  // the panel takes the whole width beside the sidebar (Esc goes back).
   const baseW = readerW ?? Math.min(760, Math.max(420, Math.round(vw * 0.42)))
-  const wantsWide = isWide || shown?.tab === "code" || needsRoom // the editor needs room
-  const readerWidth = Math.min(vw - 300, wantsWide ? Math.max(baseW, Math.round(vw * 0.75)) : baseW)
+  const isWorkspace = WORKSPACES.has(shown?.tab)
+  const wantsWide = isWide || needsRoom
+  const readerWidth = isWorkspace ? vw - (isSlim ? SIDE_W.slim : SIDE_W.full) : Math.min(vw - 300, wantsWide ? Math.max(baseW, Math.round(vw * 0.75)) : baseW)
   const resizeReader = e => {
     e.preventDefault()
     const app = e.currentTarget.closest(".app")
@@ -644,6 +658,8 @@ function App() {
     openRun: card => setRunFor(card),
     toggleWide: () => setWide(w => !w),
     setNeedsRoom,
+    isSlim,
+    toggleSlim,
     stopSession,
     toggleNotify,
     toggleSound,
@@ -659,7 +675,7 @@ function App() {
   const repoName = repoFilter && data?.repos.find(r => r.root === repoFilter)?.name
 
   return html`<${Ctx.Provider} value=${ui}>
-    <div class=${`app ${reader ? "with-reader" : ""} ${view === "canvas" ? "on-canvas" : ""} ${isSideOpen ? "side-open" : ""} ${dragging ? "is-dragging" : ""}`}
+    <div class=${`app ${reader ? "with-reader" : ""} ${view === "canvas" ? "on-canvas" : ""} ${isSideOpen ? "side-open" : ""} ${dragging ? "is-dragging" : ""} ${isSlim ? "slim" : ""}`}
       style=${`--reader-w:${readerWidth}px`}>
       ${data ? html`<${Sidebar} data=${data} repoFilter=${repoFilter} view=${view} connected=${connected} notify=${notify} sound=${sound} />`
         : html`<aside class="sidebar"><div class="brand"><span class="logo"><i></i><i></i><i></i></span>Agent Center</div></aside>`}
@@ -704,7 +720,7 @@ function App() {
       <div class="reader-slot">
         ${shown && html`<div class="reader-resize" onPointerDown=${resizeReader} onDblClick=${() => (setReaderWRaw(null), keep("readerW", null))}
           title="Drag to change the width · double-click: default width"></div>`}
-        ${shown && html`<${Reader} key=${shown.id} id=${shown.id} card=${readerCard} result=${readerResult} tab=${shown.tab} file=${shown.file} isWide=${wantsWide}
+        ${shown && html`<${Reader} key=${shown.id} id=${shown.id} card=${readerCard} result=${readerResult} tab=${shown.tab} file=${shown.file} isWide=${wantsWide} isWorkspace=${isWorkspace}
           hasTasks=${data?.features?.organizer !== false} />`}
       </div>
       <${Toasts} toasts=${toasts} />

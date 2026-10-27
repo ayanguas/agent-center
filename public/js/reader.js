@@ -78,7 +78,7 @@ const TABS = [
 ]
 
 // hasTasks: the organizer is on (lib/setup.ts); without it there is no Tasks tab.
-export function Reader({ id, card, result, tab: asked, file, isWide, hasTasks = true }) {
+export function Reader({ id, card, result, tab: asked, file, isWide, isWorkspace = false, hasTasks = true }) {
   const tabs = hasTasks ? TABS : TABS.filter(([key]) => key !== "tasks")
   const tab = tabs.some(([key]) => key === asked) ? asked : "chat"
   const ui = useContext(Ctx)
@@ -132,25 +132,22 @@ export function Reader({ id, card, result, tab: asked, file, isWide, hasTasks = 
   const counts = { prs: card?.prs?.length ?? 0, tasks: card?.taskCount ?? 0 }
   return html`<aside class="reader" aria-label="Conversation">
     <header class="reader-head">
-      <div class="reader-title">
-        <div class="reader-sub">
-          ${card && html`<${StatusChip} card=${card} />`}
-          ${repo && html`<${RepoTag} name=${repo} />`}
-          ${card?.branch && html`<span class="branch"><${Icon} name="branch" size=${12} />${card.branch}</span>`}
-        </div>
-        <${Title} card=${card} fallback=${title} />
-
+      <div class="reader-bar">
+        ${card && html`<${StatusChip} card=${card} />`}
+        ${repo && html`<${RepoTag} name=${repo} />`}
+        ${card?.branch && html`<span class="branch"><${Icon} name="branch" size=${12} />${card.branch}</span>`}
+        <span class="reader-tools">
+          ${card && html`<${Actions} card=${card} compact />`}
+          <button class="btn primary sm" onClick=${() => ui.launch(id)} title="Open in Claude (O)">
+            Open in Claude <${Icon} name="external" size=${12} /></button>
+          ${!isWorkspace && html`<button class="icon-btn" onClick=${ui.toggleWide} title=${isWide ? "Normal width" : "Widen the panel"}>
+            <${Icon} name=${isWide ? "shrink" : "expand"} size=${15} /></button>`}
+          <button class="icon-btn" onClick=${ui.closeReader} title="Close (Esc)"><${Icon} name="x" /></button>
+        </span>
       </div>
-      <div class="reader-tools">
-        ${card && html`<${Actions} card=${card} />`}
-        <button class="btn primary" onClick=${() => ui.launch(id)} title="Open in Claude (O)">
-          Open in Claude <${Icon} name="external" size=${13} /></button>
-        <button class="icon-btn" onClick=${ui.toggleWide} title=${isWide ? "Normal width" : "Widen the panel"}>
-          <${Icon} name=${isWide ? "shrink" : "expand"} size=${15} /></button>
-        <button class="icon-btn" onClick=${ui.closeReader} title="Close (Esc)"><${Icon} name="x" /></button>
-      </div>
+      <${Title} card=${card} fallback=${title} />
     </header>
-    <nav class="tabs" role="tablist" aria-orientation="vertical">
+    <nav class="tabs" role="tablist">
       ${tabs.map(([key, icon, label]) => html`<button key=${key} id=${`reader-tab-${key}`} role="tab" aria-selected=${tab === key}
         aria-controls="reader-panel" onClick=${() => ui.setReaderTab(key)} title=${label}>
         <${Icon} name=${icon} size=${14} /><span class="tab-label">${label}</span>${counts[key] > 0 && html`<span class="count">${counts[key]}</span>`}</button>`)}

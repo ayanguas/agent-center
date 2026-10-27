@@ -201,6 +201,8 @@ async function cardOf(
     // What Claude said it did in its last turn (the wrap-up recap or the
     // first line of its answer).
     recap: cleanPrompt(s.summary) ?? null,
+    // What the person asked last (the canvas's hover preview).
+    lastPrompt: cleanPrompt(s.last_prompt) ?? null,
     mode: s.mode ?? null,
     effort: s.effort ?? null,
     // Only while the session lives: a closed process took its background work with it.
