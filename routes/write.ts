@@ -38,7 +38,8 @@ async function newSession(body: Record<string, unknown>) {
   if (!(await isFolder(folder))) return json({ error: "that folder does not exist" }, 400)
   const prompt = String(body.prompt ?? "").trim()
   if (!body.send || !prompt) return json({ ok: await newInClient(folder, prompt) })
-  const mode = MODES.includes(String(body.mode)) ? String(body.mode) : "auto"
+  // Bypass permissions unless the page asks for another mode.
+  const mode = MODES.includes(String(body.mode)) ? String(body.mode) : "bypassPermissions"
   const extra: string[] = []
   if (/^claude-[\w.-]+$/.test(String(body.model ?? ""))) extra.push("--model", String(body.model))
   if (EFFORTS.includes(String(body.effort))) extra.push("--effort", String(body.effort))

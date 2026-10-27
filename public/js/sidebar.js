@@ -41,6 +41,9 @@ export function Sidebar({ data, repoFilter, view, connected, notify, sound }) {
       <button class=${view === "canvas" ? "on" : ""} onClick=${() => ui.setView("canvas")} title="Canvas (3)">
         <${Icon} name="canvas" />Canvas
       </button>
+      <button class=${view === "tiers" ? "on" : ""} onClick=${() => ui.setView("tiers")} title="Tiers: sessions by importance (4)">
+        <${Icon} name="list" />Tiers
+      </button>
     </nav>
     <div class="side-title">Repos</div>
     <nav class="nav repos">

@@ -237,9 +237,42 @@ function ParkMenu({ card, onClose }) {
   </div>`
 }
 
+// The colours a card can wear (lib/board.ts CARD_COLORS), in the order the
+// keys 1–7 pick them; 0 takes the colour off.
+export const CARD_COLORS = [
+  { key: "lilac", label: "Lilac" },
+  { key: "blue", label: "Blue" },
+  { key: "teal", label: "Teal" },
+  { key: "green", label: "Green" },
+  { key: "yellow", label: "Yellow" },
+  { key: "orange", label: "Orange" },
+  { key: "pink", label: "Pink" },
+]
+
+// A row of swatches under the palette button; the one it wears is ringed.
+function ColorMenu({ card, onClose }) {
+  const ui = useContext(Ctx)
+  const ref = useRef()
+  useEffect(() => {
+    const away = e => ref.current && !ref.current.contains(e.target) && onClose()
+    const timer = setTimeout(() => document.addEventListener("pointerdown", away), 0)
+    return () => (clearTimeout(timer), document.removeEventListener("pointerdown", away))
+  }, [])
+  const pick = color => (onClose(), ui.act(card, "color", { color }))
+  return html`<div class="menu color-menu" ref=${ref} role="menu" onClick=${e => e.stopPropagation()}>
+    <div class="menu-title">Colour</div>
+    <div class="swatches">
+      <button role="menuitem" class=${`none ${card.color ? "" : "on"}`} title="No colour (0)" aria-label="No colour" onClick=${() => pick("")}></button>
+      ${CARD_COLORS.map((c, i) => html`<button key=${c.key} role="menuitem" class=${card.color === c.key ? "on" : ""} data-color=${c.key}
+        title=${`${c.label} (${i + 1})`} aria-label=${c.label} onClick=${() => pick(c.key)}></button>`)}
+    </div>
+  </div>`
+}
+
 export function Actions({ card, compact = false }) {
   const ui = useContext(Ctx)
   const isParkOpen = ui.parkMenu === card.id
+  const isColorOpen = ui.colorMenu === card.id
   const stop = fn => e => (e.stopPropagation(), fn())
   return html`<div class=${`actions ${compact ? "compact" : ""}`} onClick=${e => e.stopPropagation()}>
     <button class="icon-btn" title="Open in Claude (O)" onClick=${stop(() => ui.launch(card.id))}>
@@ -252,6 +285,12 @@ export function Actions({ card, compact = false }) {
       onClick=${stop(() => ui.toggleWatch(card))}><${Icon} name="bell" size=${15} /></button>`}
     <button class=${`icon-btn ${card.run ? "on" : ""}`} title="Run: start this session's project" onClick=${stop(() => ui.openRun(card))}>
       <${Icon} name="play" size=${14} /></button>
+    <span class="anchor">
+      <button class=${`icon-btn ${card.color ? "tinted" : ""} ${isColorOpen ? "on" : ""}`} title="Colour (C)" aria-haspopup="menu"
+        onClick=${stop(() => ui.setColorMenu(isColorOpen ? null : card.id))}>
+        <${Icon} name="palette" size=${15} /></button>
+      ${isColorOpen && html`<${ColorMenu} card=${card} onClose=${() => ui.setColorMenu(null)} />`}
+    </span>
     ${card.column === "pending" &&
     html`<button class="icon-btn" title="Mark to review: back to “To review”, as if you had not opened it (U)"
       onClick=${stop(() => ui.act(card, "unseen"))}><${Icon} name="eye" size=${15} /></button>`}

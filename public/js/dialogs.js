@@ -20,7 +20,7 @@ export function NewSession({ initialRoot, onClose }) {
   const [root, setRoot] = useState(initialRoot)
   const [picked, setPicked] = useState(null) // a folder chosen with "Browse…"
   const [prompt, setPrompt] = useState("")
-  const [prefs, setPrefs] = useState(() => ({ mode: "auto", model: "claude-fable-5-1", effort: "high", ...load("newPrefs", {}) }))
+  const [prefs, setPrefs] = useState(() => ({ mode: "bypassPermissions", model: "claude-fable-5-1", effort: "high", ...load("newPrefs", {}) }))
   const attach = useAttachments()
   const files = attach.files
   const whisper = useWhisper()
@@ -131,11 +131,13 @@ const SHORTCUTS = [
   ["Rename", [["T"]]],
   ["Open in Claude", [["O"]]],
   ["Pin", [["P"]]],
+  ["Colour", [["C"], ["0–7"]]],
   ["Later", [["A"], ["1–5"]]],
   ["Mark as done", [["E"]]],
   ["Undo", [["Z"]]],
   ["Search", [["/"], ["⌘", "K"]]],
-  ["Inbox · Board · Canvas", [["1"], ["2"], ["3"]]],
+  ["Inbox · Board · Canvas · Tiers", [["1"], ["2"], ["3"], ["4"]]],
+  ["Tiers: one row up · down", [["["], ["]"]]],
   ["Lanes per repo", [["G"]]],
   ["Next up: what waits for you", [["F"]]],
   ["New session", [["N"]]],

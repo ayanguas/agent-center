@@ -1,7 +1,7 @@
 // What the page does to one session (POST /api/sessions/<id>/<action>):
 // messages through the bridge mod, answers, stop, settings, waking and
 // opening it in the client, forks, runs, and the board's own actions (pin,
-// park, done, archive, seen, move, rename).
+// park, done, archive, seen, move, rename, color, tier).
 
 import { applyAction, isBoardAction } from "../lib/board"
 import { answer as answerQuestion, isBusy, permit, requestSettings, send as sendMessage, status as bridgeStatus, stop as stopTurn, unsend } from "../lib/bridge"

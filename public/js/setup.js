@@ -180,6 +180,12 @@ export function Setup({ onClose, notify, sound }) {
         <p class="setup-text">A short chime when a session finishes its turn or asks you something, also while you look at the board (notifications only reach you in another window). The speaker in the sidebar turns it on and off.</p>
         <div class="setup-actions"><button class=${`btn ${sound === "on" ? "" : "primary"}`} onClick=${() => ui.toggleSound()}>${sound === "on" ? "Turn off" : "Turn on"}</button></div>
       </li>`}
+      ${status && html`<li class=${`setup-step ${ui.shake === "on" ? "done" : "missing"}`}>
+        <div class="setup-head"><b>Shake waiting cards</b><span class="setup-need need-optional">Preference</span>
+          ${ui.shake === "on" ? html`<span class="setup-state done"><${Icon} name="check" size=${13} />On</span>` : html`<span class="setup-state todo">Off</span>`}</div>
+        <p class="setup-text">A card that asks you something or waits for your approval gives a short shake every few seconds, faster the longer it waits. Turned off, it stays still and only its colour and the time it has waited tell you.</p>
+        <div class="setup-actions"><button class=${`btn ${ui.shake === "on" ? "" : "primary"}`} onClick=${() => ui.setShake(ui.shake === "on" ? "off" : "on")}>${ui.shake === "on" ? "Turn off" : "Turn on"}</button></div>
+      </li>`}
       ${status && html`<${ReadAloud} />`}
     </ol>
     <div class="dialog-actions">
