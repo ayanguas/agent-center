@@ -5,12 +5,14 @@
 import { basename } from "node:path"
 import { status as bridgeStatus } from "../lib/bridge"
 import { changesOf } from "../lib/changes"
+import { codeTree, readCode } from "../lib/code"
 import { HOME } from "../lib/config"
 import { isArchivedInApp, readDesktop } from "../lib/desktop"
 import { lastDigest } from "../lib/digest"
 import { detail as prDetail, lookup as prLookup, openThreads } from "../lib/github"
 import { json } from "../lib/http"
 import { latestJson, latestState, stream } from "../lib/live"
+import { monacoState } from "../lib/monaco"
 import { documentHtml, quickLook, WORD, WORKBOOK, workbookHtml } from "../lib/office"
 import { readTasks } from "../lib/organizer"
 import { branchState, knownRepos, repoInfo } from "../lib/repo"
@@ -120,6 +122,14 @@ async function sessionRead(id: string, what: string, url: URL) {
       const page = await readMessages(id, { before: offset(url.searchParams.get("before")), after: offset(url.searchParams.get("after")) })
       return page ? json(page) : json({ error: "Cannot find this session's transcript" }, 404)
     }
+    // The "Code" tab: the folder's files, and one of them as text.
+    case "codetree":
+      return group ? json(await codeTree(group.lead.cwd)) : json({ error: "unknown session" }, 404)
+    case "codefile": {
+      if (!group) return json({ error: "unknown session" }, 404)
+      const { status = 200, ...file } = await readCode(group.lead.cwd, url.searchParams.get("path") ?? "", url.searchParams.has("time"))
+      return json(file, status)
+    }
     case "changes": {
       const result = group ? await changesOf(group.lead.cwd) : null
       return result ? json(result) : json({ error: "This session's folder is not a git repository" }, 404)
@@ -199,6 +209,7 @@ export async function handleRead(url: URL): Promise<Response | null> {
   if (path === "/api/search") return json({ results: await searchResults(url.searchParams.get("q") ?? "") })
   if (path === "/api/transcribe") return json({ ready: await voiceReady() })
   if (path === "/api/setup") return json(await setupStatus())
+  if (path === "/api/monaco") return json(await monacoState())
   if (path === "/api/voices") return json({ voices: await listVoices(), default: defaultVoice() })
   const file = path.match(/^\/api\/uploads\/(.+)$/)
   if (file) return sentFile(decodeURIComponent(file[1]!))

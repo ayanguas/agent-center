@@ -22,6 +22,7 @@ import { activate } from "./lib/client"
 import { HOSTS, ORIGINS, PORT, PUBLIC_DIR, SESSIONS_DIR } from "./lib/config"
 import { json } from "./lib/http"
 import { refreshSoon, startLive } from "./lib/live"
+import { monacoFile } from "./lib/monaco"
 import { stopAllCommands } from "./lib/commands"
 import { stopAll as stopRuns } from "./lib/runner"
 import { MAX_UPLOAD_BYTES } from "./lib/uploads"
@@ -63,6 +64,12 @@ async function route(req: Request): Promise<Response> {
     if (global) return global
     const session = path.match(/^\/api\/sessions\/([\w-]+)\/(\w+)$/)
     return session ? handleSession(session[1]!, session[2]!, body) : json({ error: "not found" }, 404)
+  }
+
+  // The code editor, downloaded on first use (lib/monaco.ts).
+  if (path.startsWith("/vendor/monaco/")) {
+    const asset = await monacoFile(path.slice("/vendor/monaco".length))
+    return asset ? new Response(asset, { headers: { "cache-control": "max-age=86400" } }) : new Response("Not found", { status: 404 })
   }
 
   // The page itself. no-cache: every load asks for the current files (they are local and small).

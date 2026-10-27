@@ -9,6 +9,7 @@ import { activate, openInClient } from "../lib/client"
 import { isArchivedInApp } from "../lib/desktop"
 import { commandStatus, runCommand, stopCommand } from "../lib/commands"
 import { EFFORTS, MODES } from "../lib/config"
+import { saveCode } from "../lib/code"
 import { forkPoint } from "../lib/fork"
 import { errorMessage, json } from "../lib/http"
 import { launch } from "../lib/launch"
@@ -168,6 +169,13 @@ export async function handleSession(id: string, action: string, body: Record<str
       if (!file) return json({ error: "This session does not name that file, or it is gone" }, 404)
       const opened = (await Bun.spawn(["/usr/bin/open", ...(body.reveal ? ["-R"] : []), file.path]).exited) === 0
       return json(opened ? { ok: true } : { error: "macOS could not open it" }, opened ? 200 : 500)
+    }
+    // A file edited in the "Code" tab, saved if nobody changed it meanwhile.
+    case "codesave": {
+      const group = groupOf(id)
+      if (!group || typeof body.text !== "string") return json({ error: "nothing to save" }, 400)
+      const { status = 200, ...res } = await saveCode(group.lead.cwd, String(body.path ?? ""), body.text, Number(body.mtime), body.force === true)
+      return json(res, status)
     }
     // Its turn ended, or it asks you: read aloud what it did (lib/speech.ts).
     case "speak": {

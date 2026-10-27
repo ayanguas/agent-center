@@ -5,6 +5,7 @@
 // has them, and polls the session's bridge mod for what it holds.
 import { html, useContext, useEffect, useRef, useState } from "../vendor/preact-htm.js"
 import { Changes } from "./changes.js"
+import { Code } from "./code.js"
 import { Actions, RepoTag, StatusChip } from "./components.js"
 import { Composer } from "./composer.js"
 import { Conversation } from "./conversation.js"
@@ -70,6 +71,7 @@ function savePending(id, list) {
 const TABS = [
   ["chat", "chat", "Conversation"],
   ["changes", "diff", "Changes"],
+  ["code", "code", "Code"],
   ["prs", "pr", "PRs"],
   ["files", "file", "Files"],
   ["tasks", "tasks", "Tasks"],
@@ -150,7 +152,7 @@ export function Reader({ id, card, result, tab: asked, file, isWide, hasTasks = 
         <${Icon} name=${icon} size=${14} /><span class="tab-label">${label}</span>${counts[key] > 0 && html`<span class="count">${counts[key]}</span>`}</button>`)}
     </nav>
     <div class="tab-panel" id="reader-panel" role="tabpanel" aria-labelledby=${`reader-tab-${tab}`}>
-      ${tab === "changes" ? html`<${Changes} id=${id} onSend=${sendText} />` : tab === "prs" ? html`<${Prs} id=${id} onSend=${sendText} />` : tab === "files" ? html`<${Files} id=${id} file=${file} />` : tab === "chat"
+      ${tab === "changes" ? html`<${Changes} id=${id} onSend=${sendText} />` : tab === "code" ? html`<${Code} id=${id} />` : tab === "prs" ? html`<${Prs} id=${id} onSend=${sendText} />` : tab === "files" ? html`<${Files} id=${id} file=${file} />` : tab === "chat"
         ? html`<${Conversation} id=${id} card=${card} pending=${allPending} onUnsend=${unsend} stuck=${bridge?.stuck ?? []}
               isOpen=${!!bridge?.isOpen} untrusted=${!!bridge?.wake?.untrusted} question=${bridge?.question}
               permission=${bridge?.permission} failed=${bridge?.failed ?? []}

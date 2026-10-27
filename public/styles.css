@@ -1620,3 +1620,46 @@ button.file-chip { cursor: pointer; font: inherit; font-size: 12.5px; }
 .file-table table { border-collapse: collapse; font-size: 12.5px; }
 .file-table th, .file-table td { border: 1px solid var(--line); padding: 4px 8px; text-align: left; vertical-align: top; white-space: pre-wrap; max-width: 420px; }
 .file-table th { background: var(--side); position: sticky; top: 0; }
+
+/* ---------- Code tab (code.js): the tree, the open files and Monaco ---------- */
+.code { position: relative; flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(180px, 24%) minmax(0, 1fr); }
+.code-tree { display: flex; flex-direction: column; min-height: 0; border-right: 1px solid var(--line); background: var(--side); }
+.code-tree header { display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 8px 8px 6px 12px; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+.code-tree header b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.code-rows { flex: 1; overflow: auto; padding: 0 4px 12px; }
+.code-row { display: flex; align-items: center; gap: 4px; width: 100%; height: 24px; padding: 0 6px 0 calc(8px + var(--depth) * 12px); border-radius: 5px; font-size: 12.5px; color: var(--text); text-align: left; }
+.code-row.file { padding-left: calc(24px + var(--depth) * 12px); }
+.code-row:hover { background: var(--hover); }
+.code-row.on { background: var(--select); }
+.code-chev { flex: none; color: var(--muted); transition: transform 120ms var(--ease-out); }
+.code-chev.open { transform: rotate(90deg); }
+.code-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.code-st { flex: none; font: 600 10.5px var(--mono); }
+.st-M .code-name, .code-st.st-M, .st-M.code-st { color: var(--ask); }
+.st-A .code-name, .st-U .code-name, .code-st.st-A, .code-st.st-U { color: var(--work); }
+.st-R .code-name, .code-st.st-R { color: var(--review); }
+.code-dot { flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--ask); opacity: 0.7; }
+.code-main { position: relative; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.code-tabs { flex: none; display: flex; overflow-x: auto; border-bottom: 1px solid var(--line); background: var(--side); scrollbar-width: none; }
+.code-tabs:empty { display: none; }
+.code-tabs button { display: flex; align-items: center; gap: 6px; height: 32px; padding: 0 8px 0 12px; font-size: 12.5px; color: var(--muted); border-right: 1px solid var(--line); white-space: nowrap; }
+.code-tabs button.on { background: var(--surface); color: var(--text); box-shadow: inset 0 -2px 0 var(--accent); }
+.code-close { display: grid; place-items: center; width: 18px; height: 18px; border-radius: 4px; }
+.code-close:hover { background: var(--press); }
+.code-dirty { width: 8px; height: 8px; border-radius: 50%; background: var(--text); }
+.code-close:hover .code-dirty { display: none; }
+.code-close:hover::after { content: "×"; font-size: 14px; line-height: 1; }
+.code-notice { flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 12px; font-size: 12.5px; background: var(--ask-soft); border-bottom: 1px solid var(--line); }
+.code-notice span { flex: 1 1 260px; }
+.code-editor { position: relative; flex: 1; min-height: 0; }
+.code-host { position: absolute; inset: 0; }
+.code-wait { position: absolute; inset: 0; z-index: 1; display: grid; place-items: center; padding: 24px; text-align: center; color: var(--muted); font-size: 13px; background: var(--surface); }
+.code-quick { position: absolute; z-index: 20; top: 40px; left: 50%; width: min(560px, calc(100% - 32px)); transform: translateX(-50%); padding: 8px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--raised); box-shadow: var(--shadow-pop); }
+.code-quick .field { width: 100%; }
+.code-quick-list { max-height: 320px; overflow: auto; margin-top: 6px; }
+.code-quick-list button { display: flex; align-items: baseline; gap: 8px; width: 100%; padding: 6px 8px; border-radius: 6px; font-size: 12.5px; color: var(--text); text-align: left; }
+.code-quick-list button.on { background: var(--select); }
+.code-quick-list .code-name { flex: none; max-width: 50%; }
+.code-dir { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--faint); font-size: 11.5px; }
+.code-quick-list p { margin: 8px; font-size: 12.5px; }
+.pad { padding: 12px; }

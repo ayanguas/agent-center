@@ -606,7 +606,7 @@ function App() {
 
   // ---------- the panel's width ----------
   const baseW = readerW ?? Math.min(760, Math.max(420, Math.round(vw * 0.42)))
-  const wantsWide = isWide
+  const wantsWide = isWide || shown?.tab === "code" // the editor needs room
   const readerWidth = Math.min(vw - 300, wantsWide ? Math.max(baseW, Math.round(vw * 0.75)) : baseW)
   const resizeReader = e => {
     e.preventDefault()

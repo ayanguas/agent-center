@@ -42,6 +42,11 @@ sessions through a small Claude Code mod, and keeps its own state in a folder of
 - **Changes and PRs.** Each session's diff against its base branch, with line comments sent
   back as one message; its pull requests with checks, review state, unresolved comments and a
   "Ready to merge?" checklist; merge from the panel (needs `gh`).
+- **Code**: the session's repository as in VS Code, with its editor (Monaco). The file tree with
+  git's status, the open files as tabs, `⌘S` to save and `⌘P` to open a file by name. If Claude
+  changed a file after you opened it, saving asks first: reload it, compare, or keep yours; a file
+  you did not touch follows the disk. Monaco (25 MB) is downloaded from npm the first time, checked
+  against its pinned hash, and kept in the state folder.
 - **Fork** a conversation from any of your messages into a new session, **run** the session's
   project (`▶` on the card) and see its ports, **start new sessions** in any folder with a first
   prompt, files, mode, model and effort.
@@ -177,7 +182,7 @@ the block says, as Claude desktop's own Run does.
 
 | Where | What |
 |---|---|
-| `~/Library/Application Support/Agent Center/` | the board's state (`data/`), its log (`logs/`), the Whisper model (`models/`), your choices (`settings.json`) |
+| `~/Library/Application Support/Agent Center/` | the board's state (`data/`), its log (`logs/`), the Whisper model (`models/`), the code editor (`vendor/`), your choices (`settings.json`) |
 | `~/.claude/session-inbox/` | one file per session, written by the hook |
 | `~/.claude/agent-center/` | messages, answers and heartbeats shared with the mod; the files you sent (`uploads/`) |
 
