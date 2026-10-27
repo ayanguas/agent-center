@@ -20,7 +20,7 @@ export function NewSession({ initialRoot, onClose }) {
   const [root, setRoot] = useState(initialRoot)
   const [picked, setPicked] = useState(null) // a folder chosen with "Browse…"
   const [prompt, setPrompt] = useState("")
-  const [prefs, setPrefs] = useState(() => ({ mode: "bypassPermissions", model: "claude-fable-5-1", effort: "high", ...load("newPrefs", {}) }))
+  const [prefs, setPrefs] = useState(() => ({ mode: "auto", model: "claude-fable-5-1", effort: "high", ...load("newPrefs", {}) }))
   const attach = useAttachments()
   const files = attach.files
   const whisper = useWhisper()
