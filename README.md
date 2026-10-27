@@ -54,7 +54,11 @@ sessions through a small Claude Code mod, and keeps its own state in a folder of
   against its pinned hash, and kept in the state folder.
 - **Fork** a conversation from any of your messages into a new session, **run** the session's
   project (`▶` on the card) and see its ports, **start new sessions** in any folder with a first
-  prompt, files, mode, model and effort.
+  prompt, files, mode, model and effort, in a new git worktree if you like.
+- **Suggested tasks.** When Claude suggests a task for a session of its own (the chip Claude
+  desktop shows), the conversation shows it too: **Start** opens "New session" with its folder and
+  prompt, in a new worktree, for you to change before it runs; **Dismiss** puts it away. Once started
+  (here or in the app) the card says so and links to the session.
 - **Catch me up** (`D`): one line per session about what happened since you last looked and what
   is yours to do, written by Claude in a separate call that does not touch your sessions.
 - **Plan limits** in the sidebar: how much of your 5-hour and weekly windows is used, when each
