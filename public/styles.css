@@ -1622,13 +1622,22 @@ button.file-chip { cursor: pointer; font: inherit; font-size: 12.5px; }
 .file-table th { background: var(--side); position: sticky; top: 0; }
 
 /* ---------- Code tab (code.js): the tree, the open files and Monaco ---------- */
-.code { position: relative; flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(180px, 24%) minmax(0, 1fr); }
+.code { position: relative; flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(210px, 28%) minmax(0, 1fr); }
 .code-tree { display: flex; flex-direction: column; min-height: 0; border-right: 1px solid var(--line); background: var(--side); }
 .code-tree header { display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 8px 8px 6px 12px; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
 .code-tree header b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
 .code-rows { flex: 1; overflow: auto; padding: 0 4px 12px; }
 .code-row { display: flex; align-items: center; gap: 4px; width: 100%; height: 24px; padding: 0 6px 0 calc(8px + var(--depth) * 12px); border-radius: 5px; font-size: 12.5px; color: var(--text); text-align: left; }
-.code-row.file { padding-left: calc(24px + var(--depth) * 12px); }
+.code-row.file { padding-left: calc(24px + var(--depth) * 12px); gap: 6px; }
+.code-row.dir { gap: 5px; }
+/* A file's type: a small label in its language's colour (code.js FileIcon). */
+.ficon { flex: none; display: inline-grid; place-items: center; min-width: 18px; height: 14px; padding: 0 2px; border-radius: 3px;
+  font: 700 8.5px/1 var(--mono); letter-spacing: -0.02em; color: var(--c); background: color-mix(in srgb, var(--c) 16%, transparent); }
+.ficon.glyph { background: none; min-width: 18px; padding: 0; }
+.ficon.folder { min-width: 16px; background: none; color: #c99a3b; }
+.ficon.folder.open { color: #dcb67a; }
+.ficon.folder .icon { fill: color-mix(in srgb, currentColor 25%, transparent); }
+@media (prefers-color-scheme: dark) { .ficon { background: color-mix(in srgb, var(--c) 22%, transparent); } }
 .code-row:hover { background: var(--hover); }
 .code-row.on { background: var(--select); }
 .code-chev { flex: none; color: var(--muted); transition: transform 120ms var(--ease-out); }

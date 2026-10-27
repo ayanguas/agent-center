@@ -43,7 +43,7 @@ sessions through a small Claude Code mod, and keeps its own state in a folder of
   back as one message; its pull requests with checks, review state, unresolved comments and a
   "Ready to merge?" checklist; merge from the panel (needs `gh`).
 - **Code**: the session's repository as in VS Code, with its editor (Monaco). The file tree with
-  git's status, the open files as tabs, `⌘S` to save and `⌘P` to open a file by name. If Claude
+  each file's type icon and git's status, the open files as tabs, `⌘S` to save and `⌘P` to open a file by name. If Claude
   changed a file after you opened it, saving asks first: reload it, compare, or keep yours; a file
   you did not touch follows the disk. Monaco (25 MB) is downloaded from npm the first time, checked
   against its pinned hash, and kept in the state folder.

@@ -59,6 +59,53 @@ function useMonaco() {
   return state
 }
 
+// ---------- file icons ----------
+
+// A file's type as a small coloured label, as VS Code's icon themes do: by
+// its whole name first (package.json, Dockerfile…), then its extension.
+const BY_NAME = [
+  [/^package(-lock)?\.json$/, "npm", "#cb3837"],
+  [/^tsconfig.*\.json$/, "TS", "#3178c6"],
+  [/^(dockerfile|containerfile)$|\.dockerfile$|^docker-compose.*\.ya?ml$/i, "DK", "#2496ed"],
+  [/^\.git(ignore|attributes|modules)$/, "GIT", "#f14e32"],
+  [/^\.env(\..*)?$/, "ENV", "#c9a400"],
+  [/^readme(\..*)?$/i, "i", "#519aba"],
+  [/^(license|licence|copying)(\..*)?$/i, "©", "#c9a400"],
+  [/^makefile$/i, "MK", "#6d8086"],
+  [/\.lock$|^(bun\.lockb?|yarn\.lock|pnpm-lock\.yaml|uv\.lock|poetry\.lock|cargo\.lock)$/i, "lock", "#8a8a8a", "lock"],
+]
+const BY_EXT = {
+  ts: ["TS", "#3178c6"], tsx: ["TSX", "#3178c6"], mts: ["TS", "#3178c6"], cts: ["TS", "#3178c6"],
+  js: ["JS", "#c9a400"], jsx: ["JSX", "#c9a400"], mjs: ["JS", "#c9a400"], cjs: ["JS", "#c9a400"],
+  py: ["PY", "#3572a5"], ipynb: ["NB", "#da5b0b"], rb: ["RB", "#cc342d"], php: ["PHP", "#777bb4"],
+  go: ["GO", "#00add8"], rs: ["RS", "#c4772b"], java: ["J", "#b07219"], kt: ["KT", "#a97bff"], swift: ["SW", "#f05138"],
+  c: ["C", "#6d8086"], h: ["H", "#6d8086"], cpp: ["C++", "#f34b7d"], hpp: ["H++", "#f34b7d"], cs: ["C#", "#178600"],
+  json: ["{}", "#c9a400"], jsonc: ["{}", "#c9a400"], jsonl: ["{}", "#c9a400"],
+  yml: ["YML", "#cb171e"], yaml: ["YML", "#cb171e"], toml: ["TML", "#9c4221"], ini: ["INI", "#6d8086"], xml: ["XML", "#e37933"],
+  md: ["MD", "#519aba"], mdx: ["MDX", "#519aba"], txt: ["TXT", "#8a8a8a"], log: ["LOG", "#8a8a8a"], csv: ["CSV", "#21a366"], tsv: ["TSV", "#21a366"],
+  html: ["<>", "#e34c26"], htm: ["<>", "#e34c26"], css: ["#", "#563d7c"], scss: ["#", "#c6538c"], less: ["#", "#1d365d"],
+  vue: ["V", "#41b883"], svelte: ["S", "#ff3e00"], astro: ["A", "#ff5d01"], graphql: ["GQL", "#e10098"], gql: ["GQL", "#e10098"],
+  sh: ["$", "#4eaa25"], zsh: ["$", "#4eaa25"], bash: ["$", "#4eaa25"], fish: ["$", "#4eaa25"], ps1: ["PS", "#012456"],
+  sql: ["SQL", "#e38c00"], prisma: ["PR", "#5a67d8"], proto: ["PB", "#6d8086"], tf: ["TF", "#7b42bc"],
+  svg: ["SVG", "#ffb13b"], pdf: ["PDF", "#d93831"],
+}
+const IMAGES = /^(png|jpe?g|gif|webp|avif|ico|bmp|icns)$/
+const typeOf = path => {
+  const name = nameOf(path)
+  const hit = BY_NAME.find(([re]) => re.test(name))
+  if (hit) return { label: hit[1], color: hit[2], icon: hit[3] }
+  const ext = (name.match(/\.([^.]+)$/)?.[1] ?? "").toLowerCase()
+  if (IMAGES.test(ext)) return { color: "#a074c4", icon: "image" }
+  const [label, color] = BY_EXT[ext] ?? []
+  return label ? { label, color } : { color: "var(--faint)", icon: "file" }
+}
+
+function FileIcon({ path }) {
+  const t = typeOf(path)
+  return t.icon ? html`<span class="ficon glyph" style=${`--c:${t.color}`}><${Icon} name=${t.icon} size=${13} /></span>`
+    : html`<span class="ficon" style=${`--c:${t.color}`}>${t.label}</span>`
+}
+
 // ---------- the tree ----------
 
 // Paths → folders and files, folders first.
@@ -85,6 +132,7 @@ function Folder({ node, depth, open, onToggle, status, changedDirs, active, onOp
     return html`<div key=${dir.path}>
       <button class="code-row dir" style=${`--depth:${depth}`} onClick=${() => onToggle(dir.path)} aria-expanded=${isOpen}>
         <${Icon} name="chevron" size=${12} class=${`code-chev ${isOpen ? "open" : ""}`} />
+        <span class=${`ficon folder ${isOpen ? "open" : ""}`}><${Icon} name="folder" size=${14} /></span>
         <span class="code-name">${name}</span>${changedDirs.has(dir.path) && html`<i class="code-dot" title="Has changes"></i>`}
       </button>
       ${isOpen && html`<${Folder} node=${dir} depth=${depth + 1} open=${open} onToggle=${onToggle} status=${status} changedDirs=${changedDirs} active=${active} onOpen=${onOpen} />`}
@@ -94,7 +142,7 @@ function Folder({ node, depth, open, onToggle, status, changedDirs, active, onOp
     const s = status[path]
     return html`<button key=${path} class=${`code-row file ${path === active ? "on" : ""} ${s ? `st-${s}` : ""}`} style=${`--depth:${depth}`}
       onClick=${() => onOpen(path)} title=${path}>
-      <span class="code-name">${nameOf(path)}</span>${s && html`<span class="code-st" title=${STATUS_TITLE[s] ?? s}>${s}</span>`}
+      <${FileIcon} path=${path} /><span class="code-name">${nameOf(path)}</span>${s && html`<span class="code-st" title=${STATUS_TITLE[s] ?? s}>${s}</span>`}
     </button>`
   })}`
 }
@@ -134,7 +182,7 @@ function QuickOpen({ files, onPick, onClose }) {
       onInput=${e => (setQuery(e.target.value), setIndex(0))} onBlur=${() => setTimeout(onClose, 150)} />
     <div class="code-quick-list">
       ${list.map((path, i) => html`<button key=${path} class=${i === index ? "on" : ""} onPointerDown=${e => (e.preventDefault(), onPick(path))}>
-        <span class="code-name">${nameOf(path)}</span><span class="code-dir">${dirOf(path)}</span></button>`)}
+        <${FileIcon} path=${path} /><span class="code-name">${nameOf(path)}</span><span class="code-dir">${dirOf(path)}</span></button>`)}
       ${list.length === 0 && html`<p class="muted">No file matches.</p>`}
     </div>
   </div>`
@@ -334,7 +382,7 @@ export function Code({ id }) {
     <section class="code-main">
       <nav class="code-tabs">
         ${tabs.map(t => html`<button key=${t.path} class=${t.path === active ? "on" : ""} onClick=${() => open(t.path)} title=${t.path}>
-          <span>${nameOf(t.path)}</span>${tree?.status[t.path] && html`<span class=${`code-st st-${tree.status[t.path]}`}>${tree.status[t.path]}</span>`}
+          <${FileIcon} path=${t.path} /><span>${nameOf(t.path)}</span>${tree?.status[t.path] && html`<span class=${`code-st st-${tree.status[t.path]}`}>${tree.status[t.path]}</span>`}
           <span class="code-close" role="button" title=${t.dirty ? "Not saved (⌘S saves)" : "Close"} onClick=${e => close(t.path, e)}>
             ${t.dirty ? html`<i class="code-dirty"></i>` : html`<${Icon} name="x" size=${12} />`}</span>
         </button>`)}
