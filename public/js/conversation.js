@@ -472,7 +472,8 @@ export function Conversation({ id, card, pending, onDelivered, onUnsend, stuck =
     if (users.length !== lastUserCount.current) {
       const fresh = users.slice(lastUserCount.current).map(u => u.text.trim())
       lastUserCount.current = users.length
-      for (const p of pending) if (fresh.includes(p.text)) onDelivered(p.id)
+      // The board delivers several at once in one prompt when Claude does not start the session.
+      for (const p of pending) if (fresh.some(f => f === p.text.trim() || f.includes(p.text.trim()))) onDelivered(p.id)
     }
   }, [page.items, pending])
 

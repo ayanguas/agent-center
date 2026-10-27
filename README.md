@@ -36,7 +36,9 @@ sessions through a small Claude Code mod, and keeps its own state in a folder of
   closes by itself. Reply buttons Claude offers at the end of a turn are one click.
 - **Sleeping sessions wake up.** Claude desktop stops idle sessions to save memory. Sending to
   one wakes it in the background and delivers the message; the app you were using keeps the
-  focus.
+  focus. Claude desktop runs at most as many sessions as the Mac's memory allows (6 on 16 GB) and
+  does not start one in the background past that: the board then runs the turn itself, headless,
+  in the same session (marked "headless"; open it in Claude when it ends to see it there).
 - **Stop, mode, model.** Stop a running turn (`S`), switch the permission mode and the model of
   a session from the reply box. In a session running in Auto the mode change goes as your
   message (Auto's classifier lets only the conversation change it); to a mode that asks less,

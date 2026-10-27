@@ -115,11 +115,22 @@ beforeAll(async () => {
     spawnedFrom: { sessionId: "local_server", taskId: "task_aaaa1111", title: "Fix the zebra tests" },
   }))
 
+  // A stand-in for Claude Code run headless: it says the session it resumes
+  // and writes down how it was called.
+  await writeFile(join(home, "fake-claude"), `#!/bin/sh
+printf '%s\\n' "$@" > "$HOME/fake-claude.args"
+id=new-session
+prev=""
+for a in "$@"; do [ "$prev" = "--resume" ] && id="$a"; prev="$a"; done
+echo "{\\"type\\":\\"system\\",\\"session_id\\":\\"$id\\"}"
+`, { mode: 0o755 })
+
   port = 20000 + Math.floor(Math.random() * 20000)
   server = Bun.spawn(["bun", "server.ts"], {
     cwd: join(import.meta.dir, ".."),
     env: {
       ...process.env, HOME: home, AGENT_CENTER_HOME: join(home, "state"), AGENT_CENTER_PORT: String(port), AGENT_CENTER_DATA: data, AGENT_CENTER_DRY_RUN: "1",
+      AGENT_CENTER_CLAUDE: join(home, "fake-claude"),
       // Memory read each second, and a command idle a moment counts as forgotten.
       AGENT_CENTER_MEMORY_EVERY_MS: "1000", AGENT_CENTER_FORGOTTEN_UP_MS: "0", AGENT_CENTER_FORGOTTEN_IDLE_MS: "0",
     },
@@ -328,8 +339,9 @@ describe("messages to the session", () => {
     expect((await jsonOf(fetch(`${base()}/api/sessions/${ID}/bridge`))).isArchived).toBe(false)
   })
 
-  test("says when Claude does not wake the session because it runs as many as it allows", async () => {
-    const sent = await jsonOf(post(`/api/sessions/${ID}/send`, { text: "wake up" }))
+  test("runs the turn here when Claude does not wake the session because it runs as many as it allows", async () => {
+    const first = await jsonOf(post(`/api/sessions/${ID}/send`, { text: "wake up" }))
+    const second = await jsonOf(post(`/api/sessions/${ID}/send`, { text: "and go on" }))
     // What the client writes when its governor turns the background start down
     // (in local time, which bun test and the server read in different zones: a
     // day ahead is after the send in any of them).
@@ -337,15 +349,20 @@ describe("messages to the session", () => {
     await mkdir(join(home, "Library", "Logs", "Claude"), { recursive: true })
     await writeFile(join(home, "Library", "Logs", "Claude", "main.log"),
       `${stamp} [info] [CCD] Warming session local_demo\n${stamp} [info] [CliGovernor] at cap; yielding warm spawn\n`)
-    let wake: any = null
-    for (let i = 0; i < 40 && !wake?.atCap; i++) {
+    const argsFile = join(home, "fake-claude.args")
+    let args = ""
+    for (let i = 0; i < 60 && !args; i++) {
       await Bun.sleep(250)
-      wake = (await jsonOf(fetch(`${base()}/api/sessions/${ID}/bridge`))).wake
+      args = await readFile(argsFile, "utf8").catch(() => "")
     }
-    expect(wake?.atCap).toBe(true)
-    expect(wake?.untrusted).toBe(false)
-    await post(`/api/sessions/${ID}/unsend`, { messageId: sent.messageId })
-  }, 15_000)
+    // The same session, resumed headless, with both messages as one prompt.
+    expect(args).toContain(`--resume\n${ID}\n`)
+    expect(args.endsWith("--\nwake up\n\nand go on\n")).toBe(true)
+    const bridge = await jsonOf(fetch(`${base()}/api/sessions/${ID}/bridge`))
+    expect(bridge.queued.map((q: any) => q.id)).not.toContain(first.messageId)
+    expect(bridge.queued.map((q: any) => q.id)).not.toContain(second.messageId)
+    await writeFile(join(home, "Library", "Logs", "Claude", "main.log"), "")
+  }, 20_000)
 
   test("refuses an empty message", async () => {
     expect((await post(`/api/sessions/${ID}/send`, { text: "   " })).status).toBe(400)

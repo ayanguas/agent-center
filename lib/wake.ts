@@ -12,8 +12,8 @@
 // It also skips it when it already runs as many sessions as the Mac's memory
 // allows ("[CCD] Warming session local_<id>" then "[CliGovernor] at cap;
 // yielding warm spawn"; 6 on a 16 GB Mac): a background start never goes
-// past that cap, a message written in the client does. Trying again only
-// works once other sessions went to sleep, so it goes on, and the board says why.
+// past that cap, a message written in the client does. Then the board runs
+// the turn itself (`deliver`, lib/deliver.ts) and says so.
 
 import { open, stat } from "node:fs/promises"
 import { isBusy, status, waitingSessions } from "./bridge"
@@ -68,7 +68,10 @@ async function refusal(hostIds: string[], since: number): Promise<{ untrusted: b
   }
 }
 
-async function tick(activate: (id: string) => Promise<{ ok: boolean }>) {
+type Activate = (id: string) => Promise<{ ok: boolean }>
+type Deliver = (id: string) => Promise<boolean>
+
+async function tick(activate: Activate, deliver: Deliver) {
   for (const id of await waitingSessions()) {
     const bridge = await status(id)
     if (!bridge.pending || bridge.isOpen || isBusy(bridge)) {
@@ -82,6 +85,10 @@ async function tick(activate: (id: string) => Promise<{ ok: boolean }>) {
       const found = await refusal([`local_${id}`, ...(hostId ? [hostId] : [])], w.at)
       w.untrusted = found.untrusted
       if (found.atCap) w.atCap = true
+      if (w.atCap && !w.untrusted && (await deliver(id))) {
+        wakes.delete(id)
+        continue
+      }
     }
     if (w.untrusted || w.tries >= WAKE_TRIES) {
       w.isOver = true
@@ -100,13 +107,13 @@ export function wokeNow(id: string) {
   wakes.set(id, { tries: 1, at: Date.now(), untrusted: false, atCap: false, isOver: false })
 }
 
-export function startWaking(activate: (id: string) => Promise<{ ok: boolean }>) {
+export function startWaking(activate: Activate, deliver: Deliver) {
   let isRunning = false
   setInterval(async () => {
     if (isRunning) return
     isRunning = true
     try {
-      await tick(activate)
+      await tick(activate, deliver)
     } finally {
       isRunning = false
     }

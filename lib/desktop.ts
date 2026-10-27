@@ -18,6 +18,8 @@ export type DesktopSession = {
   isStarred: boolean
   lastActivityAt: number | null
   permissionMode: string | null
+  model: string | null
+  effort: string | null
   // Suggested tasks (spawn_task) this session made that the app resolved:
   // task id → "started_notified" | "dismissed".
   suggestions: Record<string, string>
@@ -84,6 +86,8 @@ export async function readDesktop(): Promise<DesktopIndex> {
                 isStarred: !!raw.isStarred,
                 lastActivityAt: raw.lastActivityAt ?? null,
                 permissionMode: raw.permissionMode ?? null,
+                model: typeof raw.model === "string" ? raw.model : null,
+                effort: typeof raw.effort === "string" ? raw.effort : null,
                 suggestions: raw.resolvedBackgroundTaskSuggestions ?? {},
                 spawnedFrom: raw.spawnedFrom?.taskId ? { hostId: String(raw.spawnedFrom.sessionId ?? ""), taskId: String(raw.spawnedFrom.taskId) } : null,
               },

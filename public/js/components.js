@@ -197,7 +197,7 @@ export function UsageMeter({ usage, wide = false }) {
 export function Meta({ card }) {
   const ui = useContext(Ctx)
   return html`<div class="meta">
-    ${card.isLaunching && html`<span class="tag tone-work" title="The first turn runs headless; open it in Claude when it ends">headless</span>`}
+    ${card.isLaunching && html`<span class="tag tone-work" title="A turn runs here, headless (a new session's first one, or messages Claude desktop did not start the session for); open it in Claude when it ends">headless</span>`}
     ${card.state === "permission" && card.column === "asking" && html`<span class="tag tone-bad">needs approval</span>`}
     <${OverlapChip} card=${card} />
     <${BackgroundChip} card=${card} />
