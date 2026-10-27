@@ -236,13 +236,21 @@ const OVERLAP_MS = 6 * 3600_000
 export type Overlap = { id: string; title: string; files: string[]; isSameFolder: boolean }
 async function withOverlaps<C extends { id: string; title: string; cwd: string; column: string }>(cards: C[], groupsNow: Map<string, Group>, now: number) {
   const written = new Map(
-    await Promise.all(cards.map(async c => [c.id, new Set(await writtenSince(groupsNow.get(c.id)?.ids ?? [c.id], now - OVERLAP_MS).catch(() => []))] as const)),
+    await Promise.all(
+      cards.map(async c => [c.id, await writtenSince(groupsNow.get(c.id)?.ids ?? [c.id], now - OVERLAP_MS).catch(() => new Map<string, Set<string>>())] as const),
+    ),
   )
+  // Both wrote the file, each with an edit of its own: a conversation the app
+  // imported again as another session carries the same edits, and is no
+  // overlap (a fork is, once it edits on its own).
+  const ownEdit = (mine: Set<string>, theirs: Set<string>) => mine.size === 0 || [...mine].some(id => !theirs.has(id))
   return cards.map(c => {
     const overlaps: Overlap[] = []
+    const mine = written.get(c.id)!
     for (const other of cards) {
       if (other.id === c.id) continue
-      const files = [...written.get(c.id)!].filter(f => written.get(other.id)!.has(f))
+      const theirs = written.get(other.id)!
+      const files = [...mine.keys()].filter(f => theirs.has(f) && ownEdit(mine.get(f)!, theirs.get(f)!) && ownEdit(theirs.get(f)!, mine.get(f)!))
       const isSameFolder = c.column === "working" && other.column === "working" && c.cwd === other.cwd
       if (files.length || isSameFolder) overlaps.push({ id: other.id, title: other.title, files, isSameFolder })
     }

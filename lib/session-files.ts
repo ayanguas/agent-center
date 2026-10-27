@@ -23,7 +23,9 @@ const RANK = { sent: 3, artifact: 2, written: 1, mentioned: 0 }
 const WRITERS = new Set(["Write", "Edit", "MultiEdit", "NotebookEdit"])
 const MAX_VIEW_BYTES = 30 * 1024 * 1024
 
-type Scan = { offset: number; files: Map<string, FileRef>; artifacts: Map<string, string>; cwd: string }
+// writes: per file, the ids of the tool calls that wrote it (a copy of a
+// conversation, imported again by the app, carries the same ids).
+type Scan = { offset: number; files: Map<string, FileRef>; artifacts: Map<string, string>; cwd: string; writes: Map<string, Set<string>> }
 const scans = new Map<string, Scan>()
 
 const toAbsolute = (p: string, cwd: string) => {
@@ -74,7 +76,12 @@ function ingest(scan: Scan, chunk: string) {
       if (b?.type === "tool_use") {
         const input = b.input ?? {}
         if (b.name === "SendUserFile") for (const f of input.files ?? []) note(scan, f, "sent", at)
-        else if (WRITERS.has(b.name)) note(scan, input.file_path ?? input.notebook_path, "written", at)
+        else if (WRITERS.has(b.name)) {
+          const raw = input.file_path ?? input.notebook_path
+          note(scan, raw, "written", at)
+          const path = typeof raw === "string" && raw.trim() ? toAbsolute(raw, scan.cwd) : null
+          if (path && b.id) scan.writes.set(path, (scan.writes.get(path) ?? new Set()).add(String(b.id)))
+        }
         else if (b.name === "Artifact" && (!input.action || input.action === "publish") && !input.asset && input.file_path) scan.artifacts.set(b.id, input.file_path)
       }
       // An artifact's link comes back in its tool's result.
@@ -95,7 +102,7 @@ async function refsOf(ids: string[]) {
     if (!path) continue
     const { size } = await stat(path)
     let scan = scans.get(path)
-    if (!scan || size < scan.offset) scans.set(path, (scan = { offset: 0, files: new Map(), artifacts: new Map(), cwd: "" }))
+    if (!scan || size < scan.offset) scans.set(path, (scan = { offset: 0, files: new Map(), artifacts: new Map(), cwd: "", writes: new Map() }))
     scan.offset = await readAppended(path, scan.offset, size, text => ingest(scan!, text))
     for (const f of scan.files.values()) {
       const old = all.get(f.path)
@@ -132,10 +139,19 @@ export async function sessionFile(ids: string[], raw: string, cwds: string[]) {
 
 // What the session wrote or edited since `since`, but the files every
 // session touches by design (Claude's notes in ~/.claude, temporary files,
-// the task lists): for telling when two sessions edit the same file.
+// the task lists): for telling when two sessions edit the same file. Each
+// file with the ids of the edits that wrote it.
 const SHARED_BY_DESIGN = /^(?:\/private)?\/tmp\/|\/\.claude\/|\/TASKS\.md$|\/organizer\/inbox\.md$/
 export async function writtenSince(ids: string[], since: number) {
-  return [...(await refsOf(ids)).values()]
-    .filter(f => f.source === "written" && f.at >= since && !SHARED_BY_DESIGN.test(f.path))
-    .map(f => f.path)
+  const refs = await refsOf(ids)
+  const writes = new Map<string, Set<string>>()
+  for (const id of ids) {
+    const scan = scans.get((await transcriptPath(id)) ?? "")
+    for (const [path, set] of scan?.writes ?? []) writes.set(path, new Set([...(writes.get(path) ?? []), ...set]))
+  }
+  return new Map(
+    [...refs.values()]
+      .filter(f => f.source === "written" && f.at >= since && !SHARED_BY_DESIGN.test(f.path))
+      .map(f => [f.path, writes.get(f.path) ?? new Set<string>()] as const),
+  )
 }

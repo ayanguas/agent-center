@@ -67,12 +67,16 @@ beforeAll(async () => {
     { type: "assistant", uuid: "h3", cwd: home, timestamp: new Date(now - 3000).toISOString(), message: { role: "assistant", content: [
       { type: "tool_use", id: "toolu_h3", name: "Edit", input: { file_path: join(home, "shared.ts") } },
       { type: "tool_use", id: "toolu_h4", name: "Write", input: { file_path: join(home, ".claude", "notes.md") } },
+      // The same edit is in the watcher's transcript too (a copy of one
+      // conversation): not an overlap.
+      { type: "tool_use", id: "toolu_copy", name: "Edit", input: { file_path: join(home, "copied.ts") } },
     ] } },
   ]
   const watcherRows = [
     { type: "assistant", uuid: "w1", cwd: home, timestamp: new Date(now - 2000).toISOString(), message: { role: "assistant", content: [
       { type: "tool_use", id: "toolu_w1", name: "Write", input: { file_path: join(home, "shared.ts") } },
       { type: "tool_use", id: "toolu_w2", name: "Write", input: { file_path: join(home, ".claude", "notes.md") } },
+      { type: "tool_use", id: "toolu_copy", name: "Edit", input: { file_path: join(home, "copied.ts") } },
     ] } },
   ]
   await writeFile(join(home, ".claude", "projects", "demo", `${WATCHER}.jsonl`), watcherRows.map(r => JSON.stringify(r)).join("\n") + "\n")
@@ -181,7 +185,7 @@ describe("board", () => {
     expect(helper.background.map((t: any) => t.id)).toEqual(["b1"])
   })
 
-  test("tells two open sessions that edit the same file, not one every session edits", async () => {
+  test("tells two open sessions that edit the same file, not one every session edits nor a copied edit", async () => {
     const state = await jsonOf(fetch(`${base()}/api/state`))
     const helper = state.cards.find((c: any) => c.id === HELPER)
     const watcher = state.cards.find((c: any) => c.id === WATCHER)
