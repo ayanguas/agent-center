@@ -1,8 +1,9 @@
 // The "Changes" tab: the session's diff against its base branch (with what is
 // not committed yet), file by file. A click on a line leaves a comment there;
 // the comments go to the session as one message. A draft of them survives
-// closing the panel.
+// closing the panel. "Side by side" shows them in VS Code's diff view instead.
 import { html, useEffect, useRef, useState } from "../vendor/preact-htm.js"
+import { SideBySide } from "./code.js"
 import { Kbd } from "./ctx.js"
 import { Icon } from "./icons.js"
 import { get, keep, load } from "./util.js"
@@ -84,6 +85,8 @@ export function Changes({ id, onSend }) {
   const [comments, setComments] = useState(() => load(`review.${id}`, {})) // a draft survives closing the panel
   const [editing, setEditing] = useState(null)
   const [isSending, setSending] = useState(false)
+  const [view, setViewRaw] = useState(() => load("changesView", "lines")) // "lines" or "side"
+  const setView = v => (setViewRaw(v), keep("changesView", v))
   const refresh = () =>
     get(`/api/sessions/${id}/changes`).then(res => (res?.files ? (setData(res), setError(null)) : setError(res?.error ?? "Could not read the changes")))
   useEffect(() => void refresh(), [id])
@@ -107,11 +110,16 @@ export function Changes({ id, onSend }) {
     <div class="changes-head">
       <span><b>${data.files.length}</b> ${data.files.length === 1 ? "file" : "files"} · <b class="add">+${add}</b> <b class="del">−${del}</b></span>
       <span class="muted" title=${data.root}>${data.branch ? `${data.branch} against ${data.base}` : `against ${data.base}`}, with uncommitted changes</span>
+      <span class="seg" role="group" aria-label="View">
+        <button class=${view === "lines" ? "on" : ""} onClick=${() => setView("lines")} title="Line by line, with comments for the session">Lines</button>
+        <button class=${view === "side" ? "on" : ""} onClick=${() => setView("side")} title="Side by side, in VS Code's diff view">Side by side</button>
+      </span>
       <button class="btn subtle" onClick=${refresh}>Refresh</button>
     </div>
+    ${view === "side" && data.files.length > 0 && html`<${SideBySide} key=${data.files.map(f => f.path).join("|")} id=${id} files=${data.files} />`}
     ${data.truncated && html`<p class="muted df-note">The diff is very large: only the start is shown.</p>`}
     ${data.files.length === 0 && html`<div class="pane-empty">No changes against ${data.base}.</div>`}
-    <div class="changes-files">
+    <div class="changes-files" style=${view === "side" ? "display:none" : ""}>
       ${data.files.map(f => html`<${FileBlock} key=${f.path} file=${f} comments=${comments} editing=${editing}
         setEditing=${setEditing} setComment=${setComment} removeComment=${removeComment} />`)}
     </div>

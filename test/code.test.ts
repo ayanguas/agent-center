@@ -5,7 +5,7 @@ import { afterAll, beforeAll, expect, test } from "bun:test"
 import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { codeTree, readCode, saveCode } from "../lib/code"
+import { codeTree, readCode, saveCode, searchCode, versionsOf } from "../lib/code"
 
 let repo = ""
 const git = (...args: string[]) => Bun.spawnSync(["git", "-C", repo, ...args], { env: { ...process.env, GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" } })
@@ -54,4 +54,20 @@ test("saves only what nobody changed since it was read", async () => {
   expect(await readFile(join(repo, "README.md"), "utf8")).toBe("# Claude's\n")
   expect((await saveCode(repo, "README.md", "# Mine again\n", 0, true)).ok).toBe(true) // "Keep mine"
   expect(await readFile(join(repo, "README.md"), "utf8")).toBe("# Mine again\n")
+})
+
+test("searches the files git sees, new ones included", async () => {
+  const { matches } = await searchCode(repo, "EXPORT CONST")
+  expect(matches.map(m => m.path).sort()).toEqual(["src/a.ts", "src/b.ts"])
+  expect(matches.find(m => m.path === "src/b.ts")).toEqual({ path: "src/b.ts", line: 1, text: "export const b = 1" })
+  expect((await searchCode(repo, "EXPORT", { caseSensitive: true })).matches).toEqual([])
+  expect((await searchCode(repo, "const [ab] = 2", { regex: true })).matches.map(m => m.path)).toEqual(["src/a.ts"])
+  expect((await searchCode(repo, "noise")).matches).toEqual([]) // ignored by git
+})
+
+test("gives a changed file as it was and as it is", async () => {
+  const v = await versionsOf(repo, "src/a.ts", null)
+  expect(v.original).toBe("export const a = 1\n")
+  expect(v.modified).toBe("export const a = 2\n")
+  expect((await versionsOf(repo, "src/b.ts", null)).original).toBe("") // new
 })

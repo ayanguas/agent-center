@@ -5,7 +5,7 @@
 import { basename } from "node:path"
 import { status as bridgeStatus } from "../lib/bridge"
 import { changesOf } from "../lib/changes"
-import { codeTree, readCode } from "../lib/code"
+import { codeTree, readCode, searchCode, versionsOf } from "../lib/code"
 import { HOME } from "../lib/config"
 import { isArchivedInApp, readDesktop } from "../lib/desktop"
 import { lastDigest } from "../lib/digest"
@@ -129,6 +129,17 @@ async function sessionRead(id: string, what: string, url: URL) {
       if (!group) return json({ error: "unknown session" }, 404)
       const { status = 200, ...file } = await readCode(group.lead.cwd, url.searchParams.get("path") ?? "", url.searchParams.has("time"))
       return json(file, status)
+    }
+    case "codesearch": {
+      if (!group) return json({ error: "unknown session" }, 404)
+      const q = url.searchParams
+      return json(await searchCode(group.lead.cwd, q.get("q") ?? "", { caseSensitive: q.has("case"), regex: q.has("regex") }))
+    }
+    // A changed file before and after, for the side-by-side view of "Changes".
+    case "codeversions": {
+      if (!group) return json({ error: "unknown session" }, 404)
+      const { status = 200, ...res } = await versionsOf(group.lead.cwd, url.searchParams.get("path") ?? "", url.searchParams.get("old"))
+      return json(res, status)
     }
     case "changes": {
       const result = group ? await changesOf(group.lead.cwd) : null

@@ -3,7 +3,8 @@
 // as tabs, and Monaco, VS Code's own editor (lib/monaco.ts downloads it the
 // first time). ⌘S saves. If the file changed on disk since it opened (Claude
 // edited it), you choose: reload it, compare, or keep yours. An unchanged
-// open file follows the disk by itself. ⌘P opens a file by its name.
+// open file follows the disk by itself. ⌘P opens a file by its name; ⌘⇧F
+// searches every file (the panel beside the tree, as VS Code's Search).
 import { html, useContext, useEffect, useMemo, useRef, useState } from "../vendor/preact-htm.js"
 import { Ctx } from "./ctx.js"
 import { Icon } from "./icons.js"
@@ -32,11 +33,11 @@ function loadMonaco() {
 }
 
 const dark = matchMedia("(prefers-color-scheme: dark)")
-const themeNow = () => (dark.matches ? "vs-dark" : "vs")
+export const themeNow = () => (dark.matches ? "vs-dark" : "vs")
 
 // The editor ready to use: downloaded first if it is not yet (its progress
 // shown), then loaded.
-function useMonaco() {
+export function useMonaco() {
   const [state, setState] = useState({ ready: !!window.monaco?.editor })
   useEffect(() => {
     if (state.ready) return
@@ -100,7 +101,7 @@ const typeOf = path => {
   return label ? { label, color } : { color: "var(--faint)", icon: "file" }
 }
 
-function FileIcon({ path }) {
+export function FileIcon({ path }) {
   const t = typeOf(path)
   return t.icon ? html`<span class="ficon glyph" style=${`--c:${t.color}`}><${Icon} name=${t.icon} size=${13} /></span>`
     : html`<span class="ficon" style=${`--c:${t.color}`}>${t.label}</span>`
@@ -188,6 +189,75 @@ function QuickOpen({ files, onPick, onClose }) {
   </div>`
 }
 
+// ---------- ⌘⇧F ----------
+
+const escapeRe = s => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+// Where the query is in a line: [start, end] of its first match, or null.
+function spanOf(text, query, opts) {
+  try {
+    const re = new RegExp(opts.regex ? query : escapeRe(query), opts.caseSensitive ? "" : "i")
+    const m = re.exec(text)
+    return m && m[0].length ? [m.index, m.index + m[0].length] : null
+  } catch {
+    return null
+  }
+}
+
+function SearchPanel({ id, field, onOpen }) {
+  const [query, setQuery] = useState("")
+  const [opts, setOpts] = useState({ caseSensitive: false, regex: false })
+  const [res, setRes] = useState(null)
+  const [folded, setFolded] = useState(() => new Set())
+  useEffect(() => {
+    if (!query.trim()) return setRes(null)
+    let alive = true
+    const timer = setTimeout(async () => {
+      const q = new URLSearchParams({ q: query })
+      if (opts.caseSensitive) q.set("case", "1")
+      if (opts.regex) q.set("regex", "1")
+      const out = await get(`/api/sessions/${id}/codesearch?${q}`)
+      if (alive) setRes(out ?? { error: "No answer from the server" })
+    }, 250)
+    return () => ((alive = false), clearTimeout(timer))
+  }, [query, opts.caseSensitive, opts.regex])
+
+  const byFile = useMemo(() => {
+    const out = new Map()
+    for (const m of res?.matches ?? []) out.set(m.path, [...(out.get(m.path) ?? []), m])
+    return [...out]
+  }, [res])
+  const flip = key => setOpts(o => ({ ...o, [key]: !o[key] }))
+  const fold = path => setFolded(f => {
+    const next = new Set(f)
+    next.has(path) ? next.delete(path) : next.add(path)
+    return next
+  })
+  return html`<div class="code-search">
+    <div class="code-search-box">
+      <input ref=${field} class="field" value=${query} placeholder="Search in every file" spellcheck="false" onInput=${e => setQuery(e.target.value)} />
+      <button class=${`code-opt ${opts.caseSensitive ? "on" : ""}`} title="Match case" onClick=${() => flip("caseSensitive")}>Aa</button>
+      <button class=${`code-opt ${opts.regex ? "on" : ""}`} title="Regular expression" onClick=${() => flip("regex")}>.*</button>
+    </div>
+    ${res?.error && html`<p class="muted pad">${res.error}</p>`}
+    ${res && !res.error && html`<p class="code-search-sum">${res.matches.length === 0 ? "No results." : `${res.matches.length}${res.truncated ? "+" : ""} ${res.matches.length === 1 ? "result" : "results"} in ${byFile.length} ${byFile.length === 1 ? "file" : "files"}`}</p>`}
+    <div class="code-rows">
+      ${byFile.map(([path, list]) => html`<div key=${path}>
+        <button class="code-row hit-file" onClick=${() => fold(path)} title=${path}>
+          <${Icon} name="chevron" size=${12} class=${`code-chev ${folded.has(path) ? "" : "open"}`} />
+          <${FileIcon} path=${path} /><span class="code-name">${nameOf(path)}</span><span class="code-dir">${dirOf(path)}</span><span class="count">${list.length}</span>
+        </button>
+        ${!folded.has(path) && list.map(m => {
+          const span = spanOf(m.text, query, opts)
+          const from = span ? Math.max(0, span[0] - 12) : 0
+          return html`<button key=${m.line} class="code-row hit" onClick=${() => onOpen(m.path, { line: m.line, query, opts })} title=${`Line ${m.line}`}>
+            <span class="hit-text">${from > 0 ? "…" : ""}${span ? html`${m.text.slice(from, span[0])}<mark>${m.text.slice(span[0], span[1])}</mark>${m.text.slice(span[1])}` : m.text.trimStart()}</span>
+          </button>`
+        })}
+      </div>`)}
+    </div>
+  </div>`
+}
+
 // ---------- the tab ----------
 
 export function Code({ id }) {
@@ -200,6 +270,9 @@ export function Code({ id }) {
   const [notice, setNotice] = useState(null) // { path, kind: "conflict" | "changed", mtime }
   const [isComparing, setComparing] = useState(false)
   const [isQuick, setQuick] = useState(false)
+  const [side, setSide] = useState("files") // the left panel: "files" or "search"
+  const searchField = useRef()
+  const showSearch = () => (setSide("search"), setTimeout(() => searchField.current?.select(), 0))
   const host = useRef()
   const editor = useRef(null)
   const diff = useRef(null)
@@ -224,6 +297,7 @@ export function Code({ id }) {
     })
     editor.current.addCommand(m.KeyMod.CtrlCmd | m.KeyCode.KeyS, () => save())
     editor.current.addCommand(m.KeyMod.CtrlCmd | m.KeyCode.KeyP, () => setQuick(true))
+    editor.current.addCommand(m.KeyMod.CtrlCmd | m.KeyMod.Shift | m.KeyCode.KeyF, showSearch)
     const onTheme = () => m.editor.setTheme(themeNow())
     dark.addEventListener("change", onTheme)
     return () => {
@@ -241,7 +315,8 @@ export function Code({ id }) {
   }
   const markDirty = path => setTabs(ts => ts.map(t => (t.path === path ? { ...t, dirty: isDirty(path) } : t)))
 
-  const open = async path => {
+  // `at`: a search result, its match selected and shown.
+  const open = async (path, at = null) => {
     setQuick(false)
     const m = window.monaco
     if (!m || !editor.current) return
@@ -259,7 +334,13 @@ export function Code({ id }) {
     // Its folders open in the tree, so it shows there.
     setOpenDirs(dirs => new Set([...dirs, ...path.split("/").slice(0, -1).map((_, i, parts) => parts.slice(0, i + 1).join("/"))]))
     endCompare()
-    editor.current.setModel(docs.current.get(path).model)
+    const model = docs.current.get(path).model
+    editor.current.setModel(model)
+    if (at && at.line <= model.getLineCount()) {
+      const span = spanOf(model.getLineContent(at.line), at.query, at.opts) ?? [0, 0]
+      editor.current.setSelection(new m.Range(at.line, span[0] + 1, at.line, span[1] + 1))
+      editor.current.revealLineInCenter(at.line)
+    }
     editor.current.focus()
     setActive(path)
     setNotice(n => (n?.path === path ? n : null))
@@ -354,6 +435,7 @@ export function Code({ id }) {
     if (!(e.metaKey || e.ctrlKey)) return
     if (e.key === "p") (e.preventDefault(), setQuick(true))
     else if (e.key === "s") (e.preventDefault(), save())
+    else if (e.key.toLowerCase() === "f" && e.shiftKey) (e.preventDefault(), showSearch())
   }
 
   const root = useMemo(() => (tree ? treeOf(tree.files) : null), [tree?.files])
@@ -371,9 +453,13 @@ export function Code({ id }) {
   if (tree?.error) return html`<p class="muted pad">${tree.error}</p>`
   return html`<div class="code" onKeyDown=${onKey}>
     <aside class="code-tree" aria-label="Files">
-      <header><b title=${tree?.root}>${tree?.name ?? "…"}</b>
-        <button class="icon-btn" title="Go to file (⌘P)" onClick=${() => setQuick(true)}><${Icon} name="search" size=${13} /></button></header>
-      <div class="code-rows">
+      <header><b title=${tree?.root}>${side === "search" ? "Search" : (tree?.name ?? "…")}</b>
+        <span class="code-side">
+          <button class=${`icon-btn ${side === "files" ? "on" : ""}`} title="Files" onClick=${() => setSide("files")}><${Icon} name="folder" size=${13} /></button>
+          <button class=${`icon-btn ${side === "search" ? "on" : ""}`} title="Search in every file (⌘⇧F)" onClick=${showSearch}><${Icon} name="search" size=${13} /></button>
+        </span></header>
+      <div style=${side === "search" ? "" : "display:none"} class="code-side-panel"><${SearchPanel} id=${id} field=${searchField} onOpen=${open} /></div>
+      <div class="code-rows" style=${side === "files" ? "" : "display:none"}>
         ${root ? html`<${Folder} node=${root} depth=${0} open=${openDirs} onToggle=${toggle} status=${tree.status} changedDirs=${changedDirs} active=${active} onOpen=${open} />`
           : html`<p class="muted pad">Reading the folder…</p>`}
         ${tree?.truncated && html`<p class="muted pad">Only the first ${tree.files.length} files show.</p>`}
@@ -402,6 +488,74 @@ export function Code({ id }) {
         <div class="code-host" style="display:none"></div>
       </div>
       ${isQuick && tree && html`<${QuickOpen} files=${tree.files} onPick=${open} onClose=${() => setQuick(false)} />`}
+    </section>
+  </div>`
+}
+
+// ---------- "Changes", side by side ----------
+
+// The changed files on the left, the chosen one in Monaco's diff view: where
+// the branch started on the left, as it is now on the right.
+export function SideBySide({ id, files }) {
+  const ui = useContext(Ctx)
+  const monaco = useMonaco()
+  useEffect(() => (ui.setNeedsRoom(true), () => ui.setNeedsRoom(false)), [])
+  const shown = files.filter(f => !f.binary && !f.collapsed)
+  const [chosen, setChosen] = useState(shown[0] ?? null)
+  const [error, setError] = useState(null)
+  const host = useRef()
+  const view = useRef(null)
+  const drop = () => {
+    const model = view.current?.getModel()
+    view.current?.setModel(null)
+    model?.original.dispose()
+    model?.modified.dispose()
+  }
+  useEffect(() => {
+    if (!monaco.ready) return
+    view.current = window.monaco.editor.createDiffEditor(host.current, {
+      theme: themeNow(), automaticLayout: true, fontSize: 13, readOnly: true, originalEditable: false, useInlineViewWhenSpaceIsLimited: true,
+    })
+    return () => (drop(), view.current.dispose())
+  }, [monaco.ready])
+  useEffect(() => {
+    if (!monaco.ready || !chosen) return
+    let alive = true
+    const q = new URLSearchParams({ path: chosen.path })
+    if (chosen.oldPath) q.set("old", chosen.oldPath)
+    get(`/api/sessions/${id}/codeversions?${q}`).then(res => {
+      if (!alive || !view.current) return
+      if (!res || res.error) return setError(res?.error ?? "Could not read it")
+      setError(null)
+      drop()
+      const m = window.monaco
+      const stamp = Date.now()
+      view.current.setModel({
+        original: m.editor.createModel(res.original, undefined, m.Uri.parse(`inmemory://base/${stamp}/${chosen.oldPath ?? chosen.path}`)),
+        modified: m.editor.createModel(res.modified, undefined, m.Uri.parse(`inmemory://now/${stamp}/${chosen.path}`)),
+      })
+    })
+    return () => (alive = false)
+  }, [chosen?.path, monaco.ready])
+
+  return html`<div class="code side-by-side">
+    <aside class="code-tree" aria-label="Changed files">
+      <header><b>${shown.length} ${shown.length === 1 ? "file" : "files"}</b></header>
+      <div class="code-rows">
+        ${shown.map(f => html`<button key=${f.path} class=${`code-row file ${f.path === chosen?.path ? "on" : ""}`} style="--depth:0" onClick=${() => setChosen(f)} title=${f.path}>
+          <${FileIcon} path=${f.path} /><span class="code-name">${nameOf(f.path)}</span>
+          <span class="df-stat"><b class="add">+${f.additions}</b> <b class="del">−${f.deletions}</b></span>
+        </button>`)}
+      </div>
+    </aside>
+    <section class="code-main">
+      ${chosen && html`<div class="code-path" title=${chosen.path}>${chosen.oldPath ? `${chosen.oldPath} → ` : ""}${chosen.path}</div>`}
+      <div class="code-editor">
+        ${!monaco.ready && html`<div class="code-wait"><p>${monaco.error ? `The editor could not load: ${monaco.error}` : monaco.progress != null ? `Downloading the editor… ${Math.round(monaco.progress * 100)}%` : "Loading the editor…"}</p></div>`}
+        ${error && html`<div class="code-wait"><p>${error}</p></div>`}
+        ${monaco.ready && !chosen && html`<div class="code-wait"><p>No text file changed.</p></div>`}
+        <div class="code-host" ref=${host}></div>
+      </div>
     </section>
   </div>`
 }

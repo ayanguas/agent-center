@@ -100,6 +100,7 @@ function App() {
   // after the expand button, else the default. The same for every tab.
   const [readerW, setReaderWRaw] = useState(() => load("readerW", null))
   const [isWide, setWide] = useState(false)
+  const [needsRoom, setNeedsRoom] = useState(false) // a view inside asks for width (Changes side by side)
   const [vw, setVw] = useState(window.innerWidth)
   useEffect(() => {
     const on = () => setVw(window.innerWidth)
@@ -606,7 +607,7 @@ function App() {
 
   // ---------- the panel's width ----------
   const baseW = readerW ?? Math.min(760, Math.max(420, Math.round(vw * 0.42)))
-  const wantsWide = isWide || shown?.tab === "code" // the editor needs room
+  const wantsWide = isWide || shown?.tab === "code" || needsRoom // the editor needs room
   const readerWidth = Math.min(vw - 300, wantsWide ? Math.max(baseW, Math.round(vw * 0.75)) : baseW)
   const resizeReader = e => {
     e.preventDefault()
@@ -642,6 +643,7 @@ function App() {
     fillComposer: text => composerFocus.current?.fill(text),
     openRun: card => setRunFor(card),
     toggleWide: () => setWide(w => !w),
+    setNeedsRoom,
     stopSession,
     toggleNotify,
     toggleSound,

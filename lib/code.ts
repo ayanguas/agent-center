@@ -6,6 +6,7 @@
 
 import { readdir, readFile, realpath, stat, writeFile } from "node:fs/promises"
 import { basename, join, relative, sep } from "node:path"
+import { baseOf } from "./changes"
 import { exec, run } from "./proc"
 
 const MAX_FILES = 20_000
@@ -95,4 +96,51 @@ export async function saveCode(cwd: string, rel: string, text: string, mtime: nu
   if (!force && info.mtimeMs !== mtime) return { error: "It changed on disk since you opened it", conflict: true, mtime: info.mtimeMs, status: 409 }
   await writeFile(path, text)
   return { ok: true, mtime: (await stat(path)).mtimeMs }
+}
+
+// ---------- search ----------
+
+const MAX_MATCHES = 1000
+const PER_FILE = 50
+
+export type Match = { path: string; line: number; text: string }
+
+// Every line holding `query` (the words as written, or a regular expression),
+// in what the tree shows: git's files and the new ones it does not ignore.
+export async function searchCode(cwd: string, query: string, { caseSensitive = false, regex = false } = {}) {
+  const root = await rootOf(cwd)
+  if (!query.trim()) return { matches: [] as Match[], truncated: false }
+  const how = [...(caseSensitive ? [] : ["-i"]), regex ? "-E" : "-F"]
+  const isGit = (await git(root, ["rev-parse", "--is-inside-work-tree"])) === "true"
+  // -z: "path\0line\0text", whatever the path holds.
+  const cmd = isGit
+    ? ["git", "-C", root, "grep", "-n", "-I", "-z", "--no-color", "--untracked", "--exclude-standard", "-m", String(PER_FILE), ...how, "-e", query]
+    : ["grep", "-r", "-n", "-I", "-Z", "-m", String(PER_FILE), ...[...SKIPPED].map(d => `--exclude-dir=${d}`), ...how, "-e", query, "."]
+  const { code, stdout, stderr } = await exec(cmd, { cwd: root, timeoutMs: 20_000 })
+  if (code !== 0 && code !== 1) return { error: stderr.trim().split("\n")[0] || "The search failed", matches: [] as Match[], truncated: false }
+  const matches: Match[] = []
+  for (const row of stdout.split("\n")) {
+    if (matches.length >= MAX_MATCHES) return { matches, truncated: true }
+    const [path, rest] = [row.slice(0, row.indexOf("\0")), row.slice(row.indexOf("\0") + 1)]
+    if (!path || !rest) continue
+    // git grep -z ends the line number with \0 too; grep -Z with ":".
+    const m = rest.match(/^(\d+)[\0:]([\s\S]*)$/)
+    if (m) matches.push({ path: path.replace(/^\.\//, ""), line: Number(m[1]), text: m[2]!.slice(0, 400) })
+  }
+  return { matches, truncated: false }
+}
+
+// ---------- a change, both sides ----------
+
+// A changed file as it was where the branch started (`old`, its path then)
+// and as it is now, for the side-by-side diff.
+export async function versionsOf(cwd: string, rel: string, oldRel: string | null) {
+  const root = await rootOf(cwd)
+  const base = await baseOf(root)
+  const before = oldRel ?? rel
+  if (before.includes("\0") || before.startsWith("-")) return { error: "Bad path", status: 400 }
+  const shown = await exec(["git", "-C", root, "show", `${base.sha}:${before}`], { cwd: root, timeoutMs: 15_000 })
+  const original = shown.code === 0 ? shown.stdout : "" // new in this branch
+  const now = await readCode(root, rel)
+  return { path: rel, base: base.name, original, modified: "text" in now ? (now.text ?? "") : "", isDeleted: "error" in now }
 }

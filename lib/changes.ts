@@ -29,7 +29,7 @@ const git = (cwd: string, args: string[], timeoutMs = 10_000) => run(["git", "-C
 
 // The commit where this branch left the default branch; HEAD on the default
 // branch itself, so only unpushed and uncommitted work shows.
-async function baseOf(cwd: string) {
+export async function baseOf(cwd: string) {
   const remoteHead = (await git(cwd, ["symbolic-ref", "--short", "refs/remotes/origin/HEAD"])) ?? null
   const candidates = [remoteHead, "origin/main", "origin/master", "main", "master"].filter(Boolean) as string[]
   for (const ref of candidates) {
