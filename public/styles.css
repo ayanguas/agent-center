@@ -33,6 +33,9 @@
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
   --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", "Segoe UI", sans-serif;
   --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+  --code-text: #c0392b; /* inline code, as in Claude desktop */
+  --code-bg: rgb(192 57 43 / 0.07);
+  --code-line: rgb(192 57 43 / 0.16);
   --scroll: rgb(0 0 0 / 0.16);
   --scroll-hover: rgb(0 0 0 / 0.32);
   color-scheme: light;
@@ -68,6 +71,9 @@
     --shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 4px 16px rgb(0 0 0 / 0.25);
     --shadow-pop: 0 12px 40px rgb(0 0 0 / 0.5), 0 0 0 1px rgb(255 255 255 / 0.06);
     --repo-l: 70%;
+    --code-text: #f28b82;
+    --code-bg: rgb(242 139 130 / 0.1);
+    --code-line: rgb(242 139 130 / 0.2);
     --scroll: rgb(255 255 255 / 0.13);
     --scroll-hover: rgb(255 255 255 / 0.28);
     color-scheme: dark;
@@ -508,7 +514,8 @@ mark { background: var(--ask-soft); color: var(--text); border-radius: 3px; padd
 .md li { margin: 2px 0; }
 .md h1, .md h2, .md h3, .md h4 { font-size: 14px; margin: 14px 0 6px; font-weight: 650; }
 .md a { color: var(--accent); text-underline-offset: 2px; }
-.md code { font: 12px var(--mono); background: var(--hover); border: 1px solid var(--line); border-radius: 5px; padding: 0 4px; }
+.md code { font: 0.9em var(--mono); color: var(--code-text); background: var(--code-bg); border: 1px solid var(--code-line); border-radius: 5px; padding: 1px 5px; overflow-wrap: anywhere; }
+.md a code { color: inherit; }
 /* code blocks wrap their long lines (no side scroll) and have a copy button */
 .md pre { background: var(--side); border: 1px solid var(--line); border-radius: 9px; padding: 10px 12px; margin: 0 0 8px; white-space: pre-wrap; overflow-wrap: anywhere; }
 .code-box pre { padding-right: 82px; }
@@ -536,7 +543,7 @@ mark { background: var(--ask-soft); color: var(--text); border-radius: 3px; padd
 .code-out-head .grow { flex: 1; }
 .code-out pre.code-log { margin: 0; padding: 8px 10px; border-top: 1px solid var(--line); max-height: 260px; overflow: auto; font: 11.5px/1.5 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; }
 .code-out pre.code-log:empty { display: none; }
-.md pre code { background: none; border: 0; padding: 0; font-size: 12px; line-height: 1.55; white-space: inherit; }
+.md pre code { color: inherit; background: none; border: 0; padding: 0; font-size: 12px; line-height: 1.55; white-space: inherit; }
 .md table { border-collapse: collapse; margin: 0 0 8px; font-size: 12.5px; display: block; overflow-x: auto; max-width: 100%; }
 .md th, .md td { border: 1px solid var(--line); padding: 4px 9px; text-align: left; vertical-align: top; }
 .md th { background: var(--side); font-weight: 600; }
