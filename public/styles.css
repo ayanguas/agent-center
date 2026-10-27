@@ -1137,6 +1137,8 @@ mark { background: var(--ask-soft); color: var(--text); border-radius: 3px; padd
 .changes-head .muted { flex: 1; min-width: 0; font-size: 12px; }
 .changes-head b.add, .df-stat .add { color: var(--work); font-weight: 650; }
 .changes-head b.del, .df-stat .del { color: var(--bad); font-weight: 650; }
+.changes-body { flex: 1; min-height: 0; display: flex; }
+.changes-body.with-tree { display: grid; grid-template-columns: minmax(200px, 30%) minmax(0, 1fr); }
 .changes-files { flex: 1; min-height: 0; overflow: auto; padding: 10px 12px 16px; display: flex; flex-direction: column; gap: 10px; }
 .df { border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
 .df-head {
@@ -1701,3 +1703,11 @@ button.file-chip { cursor: pointer; font: inherit; font-size: 12.5px; }
 .seg button.on { background: var(--surface); color: var(--text); box-shadow: var(--shadow); }
 .side-by-side .code-row.file .df-stat { flex: none; font-size: 11px; }
 .code-path { flex: none; padding: 6px 12px; font: 12px var(--mono); color: var(--muted); border-bottom: 1px solid var(--line); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* The tree of changed files (code.js ChangedTree), in Changes. */
+.changed-tree .code-delta { flex: none; display: flex; gap: 4px; font: 500 10.5px var(--mono); }
+.changed-tree .code-delta .add { color: var(--work); }
+.changed-tree .code-delta .del { color: var(--bad); }
+.changed-tree .code-st { width: 12px; text-align: center; }
+.st-D .code-name { color: var(--bad); text-decoration: line-through; }
+.code-st.st-D { color: var(--bad); }
+.code-note { flex: none; display: inline-flex; align-items: center; gap: 2px; font-size: 10.5px; color: var(--ask); }

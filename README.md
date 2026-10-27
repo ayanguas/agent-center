@@ -40,8 +40,8 @@ sessions through a small Claude Code mod, and keeps its own state in a folder of
 - **Stop, mode, model.** Stop a running turn (`S`), switch the permission mode and the model of
   a session from the reply box.
 - **Changes and PRs.** Each session's diff against its base branch, with line comments sent
-  back as one message, or side by side in VS Code's diff view; it follows the disk, so edits
-  made by hand show too; its pull requests with checks, review state, unresolved comments and a
+  back as one message, or side by side in VS Code's diff view, with the tree of changed files
+  beside them; it follows the disk, so edits made by hand show too; its pull requests with checks, review state, unresolved comments and a
   "Ready to merge?" checklist; merge from the panel (needs `gh`).
 - **Code**: the session's repository as in VS Code, with its editor (Monaco). The file tree with
   each file's type icon and git's status, the open files as tabs, `⌘S` to save, `⌘P` to open a file by name

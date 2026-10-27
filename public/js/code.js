@@ -540,14 +540,81 @@ export function Code({ id, isShown = true }) {
   </div>`
 }
 
+// ---------- "Changes": the tree of changed files ----------
+
+const CHANGE_LETTER = { added: "A", deleted: "D", renamed: "R", modified: "M" }
+const CHANGE_CLASS = { added: "A", deleted: "D", renamed: "R", modified: "M" }
+
+// The changed files by folder, a folder holding only one folder shown as one
+// row ("src/models"), as VS Code's compact folders.
+function compactTree(files) {
+  const root = treeOf(files.map(f => f.path))
+  const squash = node => {
+    for (const [name, dir] of [...node.dirs]) {
+      let label = name
+      let d = dir
+      while (d.files.length === 0 && d.dirs.size === 1) {
+        const [childName, child] = [...d.dirs][0]
+        label = `${label}/${childName}`
+        d = child
+      }
+      squash(d)
+      node.dirs.delete(name)
+      node.dirs.set(label, d)
+    }
+    return node
+  }
+  return squash(root)
+}
+
+function ChangedFolder({ node, depth, byPath, chosen, onPick, folded, onFold, notes }) {
+  return html`${[...node.dirs.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([label, dir]) => {
+    const isOpen = !folded.has(dir.path)
+    return html`<div key=${dir.path}>
+      <button class="code-row dir" style=${`--depth:${depth}`} onClick=${() => onFold(dir.path)} aria-expanded=${isOpen}>
+        <${Icon} name="chevron" size=${12} class=${`code-chev ${isOpen ? "open" : ""}`} />
+        <span class=${`ficon folder ${isOpen ? "open" : ""}`}><${Icon} name="folder" size=${14} /></span>
+        <span class="code-name">${label}</span>
+      </button>
+      ${isOpen && html`<${ChangedFolder} node=${dir} depth=${depth + 1} byPath=${byPath} chosen=${chosen} onPick=${onPick} folded=${folded} onFold=${onFold} notes=${notes} />`}
+    </div>`
+  })}
+  ${node.files.map(path => {
+    const f = byPath.get(path)
+    return html`<button key=${path} class=${`code-row file ${path === chosen ? "on" : ""} st-${CHANGE_CLASS[f.status]}`} style=${`--depth:${depth}`}
+      onClick=${() => onPick(f)} title=${f.oldPath ? `${f.oldPath} → ${path}` : path}>
+      <${FileIcon} path=${path} /><span class="code-name">${nameOf(path)}</span>
+      ${notes?.[path] > 0 && html`<span class="code-note" title=${`${notes[path]} ${notes[path] === 1 ? "comment" : "comments"}`}><${Icon} name="pencil" size=${10} />${notes[path]}</span>`}
+      <span class="code-delta">${f.additions > 0 && html`<b class="add">+${f.additions}</b>`}${f.deletions > 0 && html`<b class="del">−${f.deletions}</b>`}</span>
+      <span class=${`code-st st-${CHANGE_CLASS[f.status]}`}>${CHANGE_LETTER[f.status]}</span>
+    </button>`
+  })}`
+}
+
+// `notes`: comments per path (the Lines view), shown beside the file.
+export function ChangedTree({ files, chosen, onPick, notes = null }) {
+  const root = useMemo(() => compactTree(files), [files])
+  const byPath = useMemo(() => new Map(files.map(f => [f.path, f])), [files])
+  const [folded, setFolded] = useState(() => new Set())
+  const fold = path => setFolded(f => {
+    const next = new Set(f)
+    next.has(path) ? next.delete(path) : next.add(path)
+    return next
+  })
+  return html`<aside class="code-tree changed-tree" aria-label="Changed files">
+    <header><b>${files.length} ${files.length === 1 ? "file" : "files"} changed</b></header>
+    <div class="code-rows">
+      <${ChangedFolder} node=${root} depth=${0} byPath=${byPath} chosen=${chosen} onPick=${onPick} folded=${folded} onFold=${fold} notes=${notes} />
+    </div>
+  </aside>`
+}
+
 // ---------- "Changes", side by side ----------
 
 // The changed files on the left, the chosen one in Monaco's diff view: where
 // the branch started on the left, as it is now on the right.
 export function SideBySide({ id, files }) {
-  const ui = useContext(Ctx)
   const monaco = useMonaco()
-  useEffect(() => (ui.setNeedsRoom(true), () => ui.setNeedsRoom(false)), [])
   const shown = files.filter(f => !f.binary && !f.collapsed)
   const [chosen, setChosen] = useState(shown[0] ?? null)
   const [error, setError] = useState(null)
@@ -587,15 +654,7 @@ export function SideBySide({ id, files }) {
   }, [chosen?.path, monaco.ready, files]) // files: a new diff (it follows the disk)
 
   return html`<div class="code side-by-side">
-    <aside class="code-tree" aria-label="Changed files">
-      <header><b>${shown.length} ${shown.length === 1 ? "file" : "files"}</b></header>
-      <div class="code-rows">
-        ${shown.map(f => html`<button key=${f.path} class=${`code-row file ${f.path === chosen?.path ? "on" : ""}`} style="--depth:0" onClick=${() => setChosen(f)} title=${f.path}>
-          <${FileIcon} path=${f.path} /><span class="code-name">${nameOf(f.path)}</span>
-          <span class="df-stat"><b class="add">+${f.additions}</b> <b class="del">−${f.deletions}</b></span>
-        </button>`)}
-      </div>
-    </aside>
+    <${ChangedTree} files=${shown} chosen=${chosen?.path} onPick=${setChosen} />
     <section class="code-main">
       ${chosen && html`<div class="code-path" title=${chosen.path}>${chosen.oldPath ? `${chosen.oldPath} → ` : ""}${chosen.path}</div>`}
       <div class="code-editor">

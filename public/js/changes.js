@@ -2,9 +2,11 @@
 // not committed yet), file by file. A click on a line leaves a comment there;
 // the comments go to the session as one message. A draft of them survives
 // closing the panel. "Side by side" shows them in VS Code's diff view instead.
-import { html, useEffect, useRef, useState } from "../vendor/preact-htm.js"
-import { SideBySide } from "./code.js"
-import { Kbd } from "./ctx.js"
+// Both have the tree of changed files beside them; in "Lines" a file in it
+// scrolls to that file (the tree folds away for room).
+import { html, useContext, useEffect, useRef, useState } from "../vendor/preact-htm.js"
+import { ChangedTree, SideBySide } from "./code.js"
+import { Ctx, Kbd } from "./ctx.js"
 import { Icon } from "./icons.js"
 import { get, keep, load } from "./util.js"
 
@@ -16,6 +18,13 @@ function reviewMessage(comments, branch) {
   return `Comments on your changes${branch ? ` (branch ${branch})` : ""}:\n\n${list
     .map((c, i) => `${i + 1}. \`${c.path}:${c.no}\`${c.side === "old" ? " (deleted line)" : ""}\n   > ${c.code.trim() || "(empty line)"}\n   ${c.text.trim().replace(/\n/g, "\n   ")}`)
     .join("\n\n")}\n\nApply these comments and tell me what you changed.`
+}
+
+// How many comments each file has, for the tree.
+function notesByPath(comments) {
+  const out = {}
+  for (const c of Object.values(comments)) out[c.path] = (out[c.path] ?? 0) + 1
+  return out
 }
 
 function DiffLine({ line, file, comment, isEditing, onPick, onSave, onRemove, onCancel }) {
@@ -55,7 +64,7 @@ function FileBlock({ file, comments, editing, setEditing, setComment, removeComm
   const [isOpen, setOpen] = useState(!file.collapsed && total <= MAX_LINES)
   const keyOf = (side, no) => `${file.path}:${side}:${no}`
   const count = Object.values(comments).filter(c => c.path === file.path).length
-  return html`<section class="df">
+  return html`<section class="df" id=${`df-${file.path}`}>
     <header class="df-head" onClick=${() => setOpen(!isOpen)}>
       <${Icon} name="chevron" size=${12} class=${isOpen ? "open" : ""} />
       <span class=${`df-status s-${file.status}`}>${{ added: "new", deleted: "deleted", renamed: "renamed", modified: "" }[file.status]}</span>
@@ -88,6 +97,13 @@ export function Changes({ id, onSend }) {
   const [isSending, setSending] = useState(false)
   const [view, setViewRaw] = useState(() => load("changesView", "lines")) // "lines" or "side"
   const setView = v => (setViewRaw(v), keep("changesView", v))
+  const [hasTree, setHasTreeRaw] = useState(() => load("changesTree", true))
+  const setHasTree = v => (setHasTreeRaw(v), keep("changesTree", v))
+  const [picked, setPicked] = useState(null)
+  // The tree, or the side-by-side view, needs a wider panel.
+  const ui = useContext(Ctx)
+  useEffect(() => (ui.setNeedsRoom(view === "side" || hasTree), () => ui.setNeedsRoom(false)), [view, hasTree])
+  const goTo = f => (setPicked(f.path), document.getElementById(`df-${f.path}`)?.scrollIntoView({ block: "start", behavior: "smooth" }))
   const last = useRef("")
   const refresh = () =>
     get(`/api/sessions/${id}/changes`).then(res => {
@@ -121,6 +137,8 @@ export function Changes({ id, onSend }) {
     <div class="changes-head">
       <span><b>${data.files.length}</b> ${data.files.length === 1 ? "file" : "files"} · <b class="add">+${add}</b> <b class="del">−${del}</b></span>
       <span class="muted" title=${data.root}>${data.branch ? `${data.branch} against ${data.base}` : `against ${data.base}`}, with uncommitted changes</span>
+      ${view === "lines" && html`<button class=${`icon-btn ${hasTree ? "on" : ""}`} onClick=${() => setHasTree(!hasTree)} title=${hasTree ? "Hide the tree" : "Show the tree of changed files"}>
+        <${Icon} name="sidebar" size=${14} /></button>`}
       <span class="seg" role="group" aria-label="View">
         <button class=${view === "lines" ? "on" : ""} onClick=${() => setView("lines")} title="Line by line, with comments for the session">Lines</button>
         <button class=${view === "side" ? "on" : ""} onClick=${() => setView("side")} title="Side by side, in VS Code's diff view">Side by side</button>
@@ -130,9 +148,12 @@ export function Changes({ id, onSend }) {
     ${view === "side" && data.files.length > 0 && html`<${SideBySide} key=${data.files.map(f => f.path).join("|")} id=${id} files=${data.files} />`}
     ${data.truncated && html`<p class="muted df-note">The diff is very large: only the start is shown.</p>`}
     ${data.files.length === 0 && html`<div class="pane-empty">No changes against ${data.base}.</div>`}
-    <div class="changes-files" style=${view === "side" ? "display:none" : ""}>
-      ${data.files.map(f => html`<${FileBlock} key=${f.path} file=${f} comments=${comments} editing=${editing}
-        setEditing=${setEditing} setComment=${setComment} removeComment=${removeComment} />`)}
+    <div class=${`changes-body ${hasTree && data.files.length > 0 ? "with-tree" : ""}`} style=${view === "side" ? "display:none" : ""}>
+      ${hasTree && data.files.length > 0 && html`<${ChangedTree} files=${data.files} chosen=${picked} onPick=${goTo} notes=${notesByPath(comments)} />`}
+      <div class="changes-files">
+        ${data.files.map(f => html`<${FileBlock} key=${f.path} file=${f} comments=${comments} editing=${editing}
+          setEditing=${setEditing} setComment=${setComment} removeComment=${removeComment} />`)}
+      </div>
     </div>
     ${n > 0 && html`<div class="changes-bar">
       <span>${n} ${n === 1 ? "comment" : "comments"}</span>
