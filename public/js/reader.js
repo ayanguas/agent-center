@@ -83,6 +83,10 @@ export function Reader({ id, card, result, tab: asked, file, isWide, hasTasks = 
   const tab = tabs.some(([key]) => key === asked) ? asked : "chat"
   const ui = useContext(Ctx)
   const [bridge, setBridge] = useState(null)
+  // Code stays alive once opened (its tree, open files, editor), hidden
+  // while another tab shows.
+  const [hasCode, setHasCode] = useState(tab === "code")
+  useEffect(() => void (tab === "code" && setHasCode(true)), [tab])
   const [pending, setPending] = useState(() => pendingOf(id)) // the reader mounts once per session
   useEffect(() => savePending(id, pending), [pending])
 
@@ -152,13 +156,14 @@ export function Reader({ id, card, result, tab: asked, file, isWide, hasTasks = 
         <${Icon} name=${icon} size=${14} /><span class="tab-label">${label}</span>${counts[key] > 0 && html`<span class="count">${counts[key]}</span>`}</button>`)}
     </nav>
     <div class="tab-panel" id="reader-panel" role="tabpanel" aria-labelledby=${`reader-tab-${tab}`}>
-      ${tab === "changes" ? html`<${Changes} id=${id} onSend=${sendText} />` : tab === "code" ? html`<${Code} id=${id} />` : tab === "prs" ? html`<${Prs} id=${id} onSend=${sendText} />` : tab === "files" ? html`<${Files} id=${id} file=${file} />` : tab === "chat"
+      ${tab === "changes" ? html`<${Changes} id=${id} onSend=${sendText} />` : tab === "code" ? null : tab === "prs" ? html`<${Prs} id=${id} onSend=${sendText} />` : tab === "files" ? html`<${Files} id=${id} file=${file} />` : tab === "chat"
         ? html`<${Conversation} id=${id} card=${card} pending=${allPending} onUnsend=${unsend} stuck=${bridge?.stuck ?? []}
               isOpen=${!!bridge?.isOpen} untrusted=${!!bridge?.wake?.untrusted} question=${bridge?.question}
               permission=${bridge?.permission} failed=${bridge?.failed ?? []}
               onDelivered=${pid => setPending(ps => ps.filter(p => p.id !== pid))} />
             <${Composer} id=${id} card=${card} bridge=${bridge} isWorking=${card?.column === "working"} onSent=${sent} />`
         : html`<${Tasks} id=${id} />`}
+      ${hasCode && html`<div class="tab-keep" style=${tab === "code" ? "" : "display:none"}><${Code} id=${id} isShown=${tab === "code"} /></div>`}
     </div>
   </aside>`
 }

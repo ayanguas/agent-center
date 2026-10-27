@@ -5,7 +5,7 @@ import { afterAll, beforeAll, expect, test } from "bun:test"
 import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { codeTree, readCode, saveCode, searchCode, versionsOf } from "../lib/code"
+import { codeTree, marksOf, readCode, saveCode, searchCode, versionsOf } from "../lib/code"
 
 let repo = ""
 const git = (...args: string[]) => Bun.spawnSync(["git", "-C", repo, ...args], { env: { ...process.env, GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" } })
@@ -70,4 +70,16 @@ test("gives a changed file as it was and as it is", async () => {
   expect(v.original).toBe("export const a = 1\n")
   expect(v.modified).toBe("export const a = 2\n")
   expect((await versionsOf(repo, "src/b.ts", null)).original).toBe("") // new
+})
+
+test("marks the lines changed since the branch started", async () => {
+  await writeFile(join(repo, "src", "c.ts"), "one\ntwo\nthree\nfour\n")
+  git("add", "src/c.ts")
+  git("commit", "-q", "-m", "c")
+  await writeFile(join(repo, "src", "c.ts"), "one\nTWO\nthree\nfour\nfive\n") // two changed, five added
+  expect(await marksOf(repo, "src/c.ts")).toEqual([{ kind: "mod", from: 2, to: 2 }, { kind: "add", from: 5, to: 5 }])
+  await writeFile(join(repo, "src", "c.ts"), "one\nfour\n") // two and three deleted
+  expect(await marksOf(repo, "src/c.ts")).toEqual([{ kind: "del", from: 1, to: 1 }])
+  expect(await marksOf(repo, "src/b.ts")).toEqual([{ kind: "add", from: 1, to: 1 }]) // new
+  expect(await marksOf(repo, "../outside.ts")).toBeNull()
 })

@@ -144,3 +144,32 @@ export async function versionsOf(cwd: string, rel: string, oldRel: string | null
   const now = await readCode(root, rel)
   return { path: rel, base: base.name, original, modified: "text" in now ? (now.text ?? "") : "", isDeleted: "error" in now }
 }
+
+// ---------- the editor's margin ----------
+
+export type Mark = { kind: "add" | "mod" | "del"; from: number; to: number }
+
+// What changed in a file since its branch started, by line, as VS Code's
+// margin shows it: added, modified, and where lines were deleted.
+export async function marksOf(cwd: string, rel: string): Promise<Mark[] | null> {
+  const root = await rootOf(cwd)
+  if (!(await inside(root, rel))) return null
+  const base = await baseOf(root)
+  const known = await exec(["git", "-C", root, "cat-file", "-e", `${base.sha}:${rel}`], { cwd: root, timeoutMs: 10_000 })
+  if (known.code !== 0) {
+    // New in this branch (or not in git at all): every line is new.
+    const now = await readCode(root, rel)
+    const lines = "text" in now && now.text !== undefined ? now.text.replace(/\n$/, "").split("\n").length : 0
+    return lines ? [{ kind: "add", from: 1, to: lines }] : []
+  }
+  const { stdout } = await exec(["git", "-C", root, "diff", "--no-color", "--no-ext-diff", "-U0", base.sha, "--", rel], { cwd: root, timeoutMs: 15_000 })
+  const marks: Mark[] = []
+  for (const m of stdout.matchAll(/^@@ -\d+(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/gm)) {
+    const removed = m[1] === undefined ? 1 : Number(m[1])
+    const at = Number(m[2])
+    const added = m[3] === undefined ? 1 : Number(m[3])
+    if (added === 0) marks.push({ kind: "del", from: Math.max(at, 1), to: Math.max(at, 1) })
+    else marks.push({ kind: removed === 0 ? "add" : "mod", from: at, to: at + added - 1 })
+  }
+  return marks
+}

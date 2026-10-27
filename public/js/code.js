@@ -4,11 +4,14 @@
 // first time). ⌘S saves. If the file changed on disk since it opened (Claude
 // edited it), you choose: reload it, compare, or keep yours. An unchanged
 // open file follows the disk by itself. ⌘P opens a file by its name; ⌘⇧F
-// searches every file (the panel beside the tree, as VS Code's Search).
+// searches every file (the panel beside the tree, as VS Code's Search). The
+// margin marks what changed since the branch started, as VS Code does. The
+// tab stays alive while the panel is open, and it remembers its open files
+// and folders per session (also after a reload); unsaved text is not kept.
 import { html, useContext, useEffect, useMemo, useRef, useState } from "../vendor/preact-htm.js"
 import { Ctx } from "./ctx.js"
 import { Icon } from "./icons.js"
-import { get, post } from "./util.js"
+import { get, keep, load, post } from "./util.js"
 
 const WATCH_MS = 3000 // how often the open file is checked on disk
 const TREE_MS = 10_000 // and the tree's git status (a folder without git is read once)
@@ -260,11 +263,16 @@ function SearchPanel({ id, field, onOpen }) {
 
 // ---------- the tab ----------
 
-export function Code({ id }) {
+// The margin's marks: green added, blue modified, a red wedge where lines went.
+const MARK_CLASS = { add: "gm-add", mod: "gm-mod", del: "gm-del" }
+const MARK_RULER = { add: "#2ea043", mod: "#2f81f7", del: "#f85149" }
+
+export function Code({ id, isShown = true }) {
   const ui = useContext(Ctx)
   const monaco = useMonaco()
+  const saved = useMemo(() => load(`code.${id}`, null), [id]) // { open, active, dirs }
   const [tree, setTree] = useState(null)
-  const [openDirs, setOpenDirs] = useState(() => new Set())
+  const [openDirs, setOpenDirs] = useState(() => new Set(saved?.dirs ?? []))
   const [tabs, setTabs] = useState([]) // [{ path, dirty }]
   const [active, setActive] = useState(null)
   const [notice, setNotice] = useState(null) // { path, kind: "conflict" | "changed", mtime }
@@ -277,14 +285,20 @@ export function Code({ id }) {
   const editor = useRef(null)
   const diff = useRef(null)
   const docs = useRef(new Map()) // path → { model, mtime, saved (version id) }
+  const marks = useRef(null) // the margin's decorations
   const latest = useRef({})
-  latest.current = { active, tabs }
+  latest.current = { active, tabs, isShown }
+
+  // Remembered for the next time: the open files, the one shown, the folders.
+  useEffect(() => {
+    if (monaco.ready) keep(`code.${id}`, { open: tabs.map(t => t.path), active, dirs: [...openDirs] })
+  }, [tabs, active, openDirs])
 
   const isGit = useRef(false)
   const loadTree = () => get(`/api/sessions/${id}/codetree`).then(res => res && ((isGit.current = !!res.isGit), setTree(res)))
   useEffect(() => {
     loadTree()
-    const timer = setInterval(() => isGit.current && loadTree(), TREE_MS)
+    const timer = setInterval(() => isGit.current && latest.current.isShown && loadTree(), TREE_MS)
     return () => clearInterval(timer)
   }, [id])
 
@@ -298,10 +312,20 @@ export function Code({ id }) {
     editor.current.addCommand(m.KeyMod.CtrlCmd | m.KeyCode.KeyS, () => save())
     editor.current.addCommand(m.KeyMod.CtrlCmd | m.KeyCode.KeyP, () => setQuick(true))
     editor.current.addCommand(m.KeyMod.CtrlCmd | m.KeyMod.Shift | m.KeyCode.KeyF, showSearch)
+    marks.current = editor.current.createDecorationsCollection()
     const onTheme = () => m.editor.setTheme(themeNow())
     dark.addEventListener("change", onTheme)
+    // A reload with text not saved asks first.
+    const onLeave = e => [...docs.current.keys()].some(isDirty) && e.preventDefault()
+    window.addEventListener("beforeunload", onLeave)
+    // The files open last time, open again in their order, then the one shown.
+    ;(async () => {
+      for (const path of saved?.open ?? []) await open(path, null, false)
+      if (saved?.active) await open(saved.active, null, false)
+    })()
     return () => {
       dark.removeEventListener("change", onTheme)
+      window.removeEventListener("beforeunload", onLeave)
       diff.current?.dispose()
       editor.current?.dispose()
       for (const doc of docs.current.values()) doc.model.dispose()
@@ -315,14 +339,29 @@ export function Code({ id }) {
   }
   const markDirty = path => setTabs(ts => ts.map(t => (t.path === path ? { ...t, dirty: isDirty(path) } : t)))
 
-  // `at`: a search result, its match selected and shown.
-  const open = async (path, at = null) => {
+  // What changed in the shown file since the branch started, in the margin.
+  const showMarks = async path => {
+    const res = await get(`/api/sessions/${id}/codemarks?path=${encodeURIComponent(path)}`)
+    if (!res?.marks || latest.current.active !== path || !marks.current) return
+    const m = window.monaco
+    marks.current.set(res.marks.map(k => ({
+      range: new m.Range(k.from, 1, k.to, 1),
+      options: {
+        isWholeLine: true, linesDecorationsClassName: MARK_CLASS[k.kind],
+        overviewRuler: { color: MARK_RULER[k.kind], position: m.editor.OverviewRulerLane.Left },
+      },
+    })))
+  }
+
+  // `at`: a search result, its match selected and shown. `focus`: false
+  // while the files of last time open again.
+  const open = async (path, at = null, focus = true) => {
     setQuick(false)
     const m = window.monaco
     if (!m || !editor.current) return
     if (!docs.current.has(path)) {
       const res = await get(`/api/sessions/${id}/codefile?path=${encodeURIComponent(path)}`)
-      if (!res || res.error) return ui.toast(res?.error ?? "Could not open it")
+      if (!res || res.error) return focus && ui.toast(res?.error ?? "Could not open it") // a remembered file may be gone
       if (res.binary || res.tooBig) return ui.toast(res.binary ? "A binary file: it does not open as text" : "Too big to open here")
       const uri = m.Uri.parse(`file:///${id}/${path}`)
       m.editor.getModel(uri)?.dispose() // left by a tab closed mid-load
@@ -341,8 +380,11 @@ export function Code({ id }) {
       editor.current.setSelection(new m.Range(at.line, span[0] + 1, at.line, span[1] + 1))
       editor.current.revealLineInCenter(at.line)
     }
-    editor.current.focus()
+    if (focus) editor.current.focus()
+    latest.current.active = path
     setActive(path)
+    marks.current?.clear()
+    void showMarks(path)
     setNotice(n => (n?.path === path ? n : null))
   }
 
@@ -356,7 +398,10 @@ export function Code({ id }) {
       const next = rest[rest.length - 1]?.path ?? null
       if (next) editor.current.setModel(docs.current.get(next).model)
       else editor.current.setModel(null)
+      latest.current.active = next
       setActive(next)
+      marks.current?.clear()
+      if (next) void showMarks(next)
     }
     doc?.model.dispose()
     docs.current.delete(path)
@@ -375,6 +420,7 @@ export function Code({ id }) {
     markDirty(path)
     setNotice(null)
     endCompare()
+    void showMarks(path)
   }
 
   const save = async (force = false) => {
@@ -391,6 +437,7 @@ export function Code({ id }) {
     setNotice(null)
     endCompare()
     loadTree()
+    void showMarks(path)
   }
 
   // The disk's version beside yours, in Monaco's diff view.
@@ -422,6 +469,7 @@ export function Code({ id }) {
   useEffect(() => {
     if (!active) return
     const timer = setInterval(async () => {
+      if (!latest.current.isShown) return
       const doc = docs.current.get(active)
       const res = doc && (await get(`/api/sessions/${id}/codefile?path=${encodeURIComponent(active)}&time`))
       if (!res || res.mtime === undefined || res.mtime === doc.mtime) return
@@ -536,7 +584,7 @@ export function SideBySide({ id, files }) {
       })
     })
     return () => (alive = false)
-  }, [chosen?.path, monaco.ready])
+  }, [chosen?.path, monaco.ready, files]) // files: a new diff (it follows the disk)
 
   return html`<div class="code side-by-side">
     <aside class="code-tree" aria-label="Changed files">

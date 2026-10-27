@@ -9,6 +9,7 @@ import { Icon } from "./icons.js"
 import { get, keep, load } from "./util.js"
 
 const MAX_LINES = 400 // a longer file opens folded
+const FOLLOW_MS = 5000 // how often an open tab reads the diff again (edits made by hand, or by Claude)
 
 function reviewMessage(comments, branch) {
   const list = Object.values(comments).sort((a, b) => a.path.localeCompare(b.path) || a.no - b.no)
@@ -87,9 +88,19 @@ export function Changes({ id, onSend }) {
   const [isSending, setSending] = useState(false)
   const [view, setViewRaw] = useState(() => load("changesView", "lines")) // "lines" or "side"
   const setView = v => (setViewRaw(v), keep("changesView", v))
+  const last = useRef("")
   const refresh = () =>
-    get(`/api/sessions/${id}/changes`).then(res => (res?.files ? (setData(res), setError(null)) : setError(res?.error ?? "Could not read the changes")))
-  useEffect(() => void refresh(), [id])
+    get(`/api/sessions/${id}/changes`).then(res => {
+      if (!res?.files) return setError(res?.error ?? "Could not read the changes")
+      setError(null)
+      const text = JSON.stringify(res)
+      if (text !== last.current) ((last.current = text), setData(res)) // unchanged: nothing redraws
+    })
+  useEffect(() => {
+    void refresh()
+    const timer = setInterval(() => document.visibilityState === "visible" && refresh(), FOLLOW_MS)
+    return () => clearInterval(timer)
+  }, [id])
   useEffect(() => keep(`review.${id}`, comments), [comments])
 
   const setComment = (key, c) => setComments(cs => ({ ...cs, [key]: c }))
