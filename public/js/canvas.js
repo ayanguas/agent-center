@@ -122,8 +122,8 @@ function CanvasCard({ card, at, scale, onDropped, z, isPicked = false, onPick, g
     },
     onClick: ev => (ev?.metaKey || ev?.shiftKey ? onPick?.(true) : (onPick?.(false), ui.openReader(card.id))),
   })
-  return html`<article ref=${ref} data-id=${card.id}
-    class=${`ccard ${isPicked ? "picked" : ""} state-${state} ${isDone ? "" : urgencyOf(card, ui.now)} ${ui.selected === card.id ? "selected" : ""} ${ui.reader?.id === card.id ? "reading" : ""} ${card.isUnread ? "unread" : ""} ${ui.parkMenu === card.id ? "raised" : ""}`}
+  return html`<article ref=${ref} data-id=${card.id} data-color=${card.color ?? undefined}
+    class=${`ccard ${isPicked ? "picked" : ""} state-${state} ${isDone ? "" : urgencyOf(card, ui.now)} ${ui.selected === card.id ? "selected" : ""} ${ui.reader?.id === card.id ? "reading" : ""} ${card.isUnread ? "unread" : ""} ${ui.parkMenu === card.id || ui.colorMenu === card.id ? "raised" : ""}`}
     style=${`left:${at.left ?? at.x}px;top:${at.top ?? at.y}px;--hue:${hue(card.repo)};animation-delay:${delay}s${z ? `;--z:${z}` : ""}`}
     tabindex="0" onPointerDown=${onPointerDown} onKeyDown=${onOpenKey(() => ui.openReader(card.id))}>
     <div class="ccard-top">

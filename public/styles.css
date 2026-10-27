@@ -155,31 +155,27 @@ textarea.field { resize: vertical; }
 
 /* ============ layout ============ */
 
-/* The reader's column grows from nothing as it opens and shrinks as it closes;
-   the reader inside keeps its width, so it slides in instead of squeezing. */
+/* The conversation slides in over the page from the right: the views below
+   keep their width (and their responsive layout) while it is open. */
 .app {
   --side-w: 256px;
   --reader-w: clamp(420px, 42vw, 760px);
   height: 100vh;
   display: grid;
   grid-template-columns: var(--side-w) minmax(0, 1fr) 0px;
-  transition: grid-template-columns 420ms cubic-bezier(0.25, 1, 0.5, 1);
 }
 /* the closed panel keeps its tabs' room past the right edge: never scroll to it */
 .app { --tabs-w: 30px; overflow: hidden; }
-.app.with-reader { grid-template-columns: var(--side-w) minmax(0, 1fr) calc(var(--reader-w) + var(--tabs-w)); }
-.reader-slot { min-width: 0; overflow: hidden; display: flex; padding-left: var(--tabs-w); }
+.reader-slot { min-width: 0; display: flex; padding-left: var(--tabs-w); }
 .reader-slot .reader { width: var(--reader-w); flex: none; transition: opacity 320ms ease, transform 420ms cubic-bezier(0.25, 1, 0.5, 1), width 420ms cubic-bezier(0.25, 1, 0.5, 1); }
 .app:not(.with-reader) .reader-slot .reader { opacity: 0; transform: translateX(28px); }
-/* On the canvas the conversation slides over it: the canvas keeps its size. */
-.app.on-canvas, .app.on-canvas.with-reader { grid-template-columns: var(--side-w) minmax(0, 1fr) 0px; }
-.app.on-canvas .reader-slot {
+.reader-slot {
   position: fixed; z-index: 40; top: 0; right: 0; bottom: 0; width: calc(var(--reader-w) + var(--tabs-w)); overflow: visible; pointer-events: none;
   transform: translateX(104%); transition: transform 420ms cubic-bezier(0.25, 1, 0.5, 1), width 420ms cubic-bezier(0.25, 1, 0.5, 1);
 }
-.app.on-canvas.with-reader .reader-slot { transform: none; }
-.app.on-canvas .reader-slot .reader { box-shadow: var(--shadow-pop); border-left: 1px solid var(--line); }
-.app.on-canvas .reader-slot > * { pointer-events: auto; }
+.app.with-reader .reader-slot { transform: none; }
+.reader-slot .reader { box-shadow: var(--shadow-pop); border-left: 1px solid var(--line); }
+.reader-slot > * { pointer-events: auto; }
 
 .sidebar {
   background: var(--side);
@@ -453,6 +449,36 @@ button.tag:hover, .pr:hover { background: var(--press); color: var(--text); }
 @media (hover: none) { .card .actions { position: static; opacity: 1; pointer-events: auto; align-self: flex-end; box-shadow: none; } }
 .col-asking .card { border-color: color-mix(in srgb, var(--ask) 35%, var(--line)); }
 
+/* the colour the person gave a session (Actions → palette), on every view:
+   a tinted face, its edge and a stripe on the left; what the session waits
+   for (asking, urgent, selected) still shows over it */
+[data-color="lilac"] { --tint: #8b5cf6; }
+[data-color="blue"] { --tint: #3b82f6; }
+[data-color="teal"] { --tint: #14b8a6; }
+[data-color="green"] { --tint: #22c55e; }
+[data-color="yellow"] { --tint: #eab308; }
+[data-color="orange"] { --tint: #f97316; }
+[data-color="pink"] { --tint: #ec4899; }
+.card[data-color], .ccard[data-color] {
+  border-color: color-mix(in srgb, var(--tint) 45%, var(--line));
+  background: color-mix(in srgb, var(--tint) 9%, var(--surface));
+  box-shadow: inset 3px 0 0 var(--tint), 0 1px 1px rgb(0 0 0 / 0.02);
+}
+.row[data-color] { background: color-mix(in srgb, var(--tint) 10%, transparent); box-shadow: inset 3px 0 0 var(--tint); }
+.row[data-color].selected { background: color-mix(in srgb, var(--tint) 18%, var(--select)); }
+@media (hover: hover) { .row[data-color]:hover:not(.selected):not(.reading) { background: color-mix(in srgb, var(--tint) 16%, transparent); } }
+.icon-btn.tinted { color: var(--tint); }
+.color-menu { min-width: 0; }
+.color-menu .swatches { display: flex; gap: 6px; padding: 2px 6px 6px; }
+.color-menu .swatches button {
+  width: 22px; height: 22px; padding: 0; border-radius: 50%; flex: none;
+  background: var(--tint); border: 2px solid transparent; transition: transform 100ms ease;
+}
+.color-menu .swatches button:hover { transform: scale(1.12); background: var(--tint); }
+.color-menu .swatches button.on { border-color: var(--text); box-shadow: inset 0 0 0 2px var(--raised); }
+.color-menu .swatches button.none { background: transparent; border: 1.5px dashed var(--line-strong); }
+.color-menu .swatches button.none:hover { background: var(--press); }
+
 /* ============ search ============ */
 
 mark { background: var(--ask-soft); color: var(--text); border-radius: 3px; padding: 0 1px; box-shadow: 0 0 0 1px var(--ask-soft); }
@@ -652,6 +678,45 @@ mark { background: var(--ask-soft); color: var(--text); border-radius: 3px; padd
 .stack-head .count { margin-left: auto; color: var(--faint); font-weight: 500; }
 .stack .card header:has(.age:only-child) { min-height: 0; }
 
+/* ============ tier list: rows by importance, the last one closes ============ */
+
+/* the rows share the whole height; a full row scrolls inside itself */
+.tiers { display: flex; flex-direction: column; gap: 8px; padding: 14px 20px 20px; height: 100%; box-sizing: border-box; }
+.tier {
+  --tier: #ef4444;
+  display: grid; grid-template-columns: 132px 1fr; flex: 1 1 0; min-height: 96px;
+  background: var(--side); border-radius: 12px; overflow: hidden;
+  transition: background-color 120ms ease, box-shadow 120ms ease, opacity 120ms ease;
+}
+.tier-1 { --tier: #f97316; }
+.tier-2 { --tier: #eab308; }
+.tier-3 { --tier: #22c55e; }
+.tier-paused { --tier: #64748b; flex-grow: 0.8; }
+.tier-paused .tier-label { color: var(--muted); }
+.tier-close { --tier: var(--faint); flex-grow: 0.6; min-height: 72px; background: color-mix(in srgb, var(--side) 55%, transparent); border: 1.5px dashed var(--line-strong); }
+.tier-label {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 10px;
+  background: color-mix(in srgb, var(--tier) 22%, var(--surface)); color: var(--text); text-align: center;
+  box-shadow: inset -1px 0 0 var(--line);
+}
+.tier-label b { font-size: 14px; font-weight: 700; line-height: 1.25; }
+.tier-label .count { font-size: 12px; color: var(--muted); font-weight: 500; }
+.tier-close .tier-label { background: transparent; color: var(--muted); }
+.tier-cards {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); align-content: start; gap: 8px; padding: 10px;
+  min-height: 0; overflow-y: auto;
+}
+.tier-cards .empty { grid-column: 1 / -1; padding: 14px 4px; align-self: center; }
+.tier.drop { box-shadow: inset 0 0 0 2px var(--accent); background: var(--accent-soft); }
+.tier-close.drop { border-color: var(--work); background: var(--work-soft); box-shadow: none; }
+.is-dragging .tier.no-drop { opacity: 0.55; }
+@media (max-width: 860px) {
+  .tiers { padding: 10px 12px 16px; height: auto; }
+  .tier { grid-template-columns: 1fr; flex: none; }
+  .tier-label { flex-direction: row; justify-content: flex-start; padding: 8px 12px; box-shadow: inset 0 -1px 0 var(--line); }
+  .tier-label .count { margin-left: auto; }
+}
+
 /* ============ swimlanes by repository ============ */
 
 .board.lanes { display: block; height: auto; padding-top: 0; }
@@ -781,6 +846,8 @@ mark { background: var(--ask-soft); color: var(--text); border-radius: 3px; padd
 .ccard.urgent-mid { --amp: 2; animation-duration: 5s; }
 .ccard.urgent-high { --amp: 2.6; animation-duration: 3.6s; }
 @media (hover: hover) { .ccard:hover { animation-play-state: paused; } }
+/* Setup → "Shake waiting cards" off: still cards (the working glow stays) */
+.no-shake .ccard { animation: none; }
 /* a short shake, then stillness for the rest of the cycle */
 @keyframes nudge {
   0%, 9%, 100% { transform: none; }
@@ -1295,9 +1362,7 @@ a.file-chip:hover { border-color: var(--line-strong); }
 
 .rec-time { font-size: 11.5px; font-weight: 650; font-variant-numeric: tabular-nums; }
 
-/* the conversation panel: drag its left edge to resize. Up to 1100px the
-   panel is fixed over the page (see "narrow windows"): it must stay so. */
-@media (min-width: 1101px) { .reader-slot { position: relative; } }
+/* the conversation panel (fixed over the page): drag its left edge to resize */
 .reader-resize {
   position: absolute; z-index: 5; top: 0; bottom: 0; left: var(--tabs-w); width: 7px; cursor: col-resize;
   background: transparent; transition: background-color 120ms ease;

@@ -63,6 +63,12 @@ sessions through a small Claude Code mod, and keeps its own state in a folder of
   shows it from 1 GB (red from 3 GB), the conversation lists each process with Stop, and the
   sidebar sums your sessions, warns when the Mac runs short of memory, and finds the commands
   left running for hours that nobody uses, to stop them all with one click.
+- **Colours**: give a card a colour of yours (lilac, blue, teal, green, yellow, orange, pink) from
+  its palette button or `C`; it wears it on the inbox, the board and the canvas.
+- **Tiers**: a fourth view, a tier list of your sessions by importance (Main task, Fixes, Searches,
+  Other), top to bottom, filling the whole height. Drag a card to a row, or move the selected one with
+  `[` and `]`; Paused puts it in Later, and the last row, Close, marks the conversation done.
+- **Still cards**: Setup → "Shake waiting cards" turns off the shake of the cards that wait for you.
 - **Overlaps**: a card warns when another open session edited the same files in the last hours,
   or works in the same folder right now.
 - **Context and cost** per session, background work running now, the task list of the current
@@ -211,6 +217,9 @@ Catch me up and new sessions run Claude Code itself (`claude -p`), with your acc
 | `T` | Rename (on the board only) |
 | `O` | Open in Claude |
 | `P` | Pin |
+| `4` | Tiers view |
+| `[`, `]` | On Tiers: the selected card one row up, down |
+| `C`, then `1`–`7` | Colour the card (`0` takes it off) |
 | `A`, then `1`–`5` | Later (pick when); on a card already in Later, back |
 | `E` | Mark as done; on a done card, reopen |
 | `U` | Mark to review (a Pending card) |

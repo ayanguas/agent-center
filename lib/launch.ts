@@ -33,7 +33,7 @@ export async function claudeBinary() {
 // `onDone(id)` runs when the first turn ends well.
 // `extraArgs`: more flags for Claude Code (a fork's --resume …). `mode`: the
 // permission mode the turn runs in.
-export async function launch(folder: string, prompt: string, onDone?: (id: string) => void, extraArgs: string[] = [], mode = "auto"): Promise<string> {
+export async function launch(folder: string, prompt: string, onDone?: (id: string) => void, extraArgs: string[] = [], mode = "bypassPermissions"): Promise<string> {
   // The prompt goes after "--", so one that starts with "-" is never a flag.
   const proc = Bun.spawn(
     [await claudeBinary(), "-p", "--output-format", "stream-json", "--verbose", "--permission-mode", mode, ...extraArgs, "--", prompt],

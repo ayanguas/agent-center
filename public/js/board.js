@@ -9,13 +9,13 @@ import { COLUMNS, STATES, hue, keep, load } from "./util.js"
 
 // ---------- board ----------
 
-function Card({ card, inStack = false }) {
+export function Card({ card, inStack = false }) {
   const ui = useContext(Ctx)
   const isSelected = ui.selected === card.id
   const isReading = ui.reader?.id === card.id
   return html`<article
-    class=${`card ${isSelected ? "selected" : ""} ${isReading ? "reading" : ""} ${ui.parkMenu === card.id ? "raised" : ""} ${card.isUnread ? "unread" : ""} ${urgencyOf(card, ui.now)}`}
-    data-id=${card.id} style=${`--hue:${hue(card.repo)}`} tabindex="0" draggable="true"
+    class=${`card ${isSelected ? "selected" : ""} ${isReading ? "reading" : ""} ${ui.parkMenu === card.id || ui.colorMenu === card.id ? "raised" : ""} ${card.isUnread ? "unread" : ""} ${urgencyOf(card, ui.now)}`}
+    data-id=${card.id} data-color=${card.color ?? undefined} style=${`--hue:${hue(card.repo)}`} tabindex="0" draggable="true"
     onClick=${() => ui.openReader(card.id)} onKeyDown=${onOpenKey(() => ui.openReader(card.id))}
     onDragStart=${e => {
       e.dataTransfer.setData("text/plain", card.id)
@@ -166,8 +166,8 @@ function Row({ card }) {
   const ui = useContext(Ctx)
   const isSelected = ui.selected === card.id
   const isReading = ui.reader?.id === card.id
-  return html`<div class=${`row ${isSelected ? "selected" : ""} ${isReading ? "reading" : ""} ${ui.parkMenu === card.id ? "raised" : ""} ${card.isUnread ? "unread" : ""} ${urgencyOf(card, ui.now)}`}
-    data-id=${card.id} style=${`--hue:${hue(card.repo)}`} tabindex="0"
+  return html`<div class=${`row ${isSelected ? "selected" : ""} ${isReading ? "reading" : ""} ${ui.parkMenu === card.id || ui.colorMenu === card.id ? "raised" : ""} ${card.isUnread ? "unread" : ""} ${urgencyOf(card, ui.now)}`}
+    data-id=${card.id} data-color=${card.color ?? undefined} style=${`--hue:${hue(card.repo)}`} tabindex="0"
     onClick=${() => ui.openReader(card.id)} onKeyDown=${onOpenKey(() => ui.openReader(card.id))}>
     <div class="row-main">
       <div class="row-line">
