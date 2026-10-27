@@ -27,7 +27,7 @@ const reduced = () => matchMedia("(prefers-reduced-motion: reduce)").matches
 
 // Where an element sits: its group and its index among that group's items.
 function placeOf(el) {
-  const group = el.closest(".column, .group, .done-area, .canvas-area") ?? el.parentElement
+  const group = el.closest(".column, .group, .tier, .done-area, .canvas-area") ?? el.parentElement
   const items = group ? [...group.querySelectorAll("[data-id]")] : []
   const kind = group?.className.match(/\b(col|group)-[\w-]+/)?.[0] ?? ""
   const lane = el.closest(".lane")?.getAttribute("data-lane") ?? ""

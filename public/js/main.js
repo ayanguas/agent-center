@@ -3,6 +3,7 @@ import { html, render, useCallback, useEffect, useMemo, useRef, useState } from 
 import { Board, Inbox } from "./board.js"
 import { Canvas } from "./canvas.js"
 import { canvasOrder } from "./canvas-layout.js"
+import { CARD_COLORS } from "./components.js"
 import { newNote } from "./canvas-notes.js"
 import { Ctx, Kbd } from "./ctx.js"
 import { Digest, Help, NewSession } from "./dialogs.js"
@@ -14,6 +15,7 @@ import { RunDialog } from "./run.js"
 import { SearchPalette } from "./search.js"
 import { Sidebar } from "./sidebar.js"
 import { chime } from "./sound.js"
+import { TIERS, Tiers, tierOf, toTier } from "./tiers.js"
 import { Toasts } from "./toasts.js"
 import { COLUMNS, PARK_OPTIONS, clock, get, isTyping, keep, load, post } from "./util.js"
 
@@ -26,6 +28,10 @@ const ENTER_KEEPS = "button, a[href], summary, [role=button], [role=option], [ro
 // The order the keyboard walks: what the current view shows, top to bottom.
 function walkOrder(view, cards, showDone, groupBy, repos) {
   if (view === "canvas") return canvasOrder(cards)
+  if (view === "tiers") {
+    const pinnedFirst = list => [...list].sort((a, b) => Number(b.pinned) - Number(a.pinned))
+    return TIERS.filter(t => t.key !== "close" || showDone).flatMap(t => pinnedFirst(cards.filter(c => c.column !== "archived" && tierOf(c) === t.key)))
+  }
   const cols = COLUMNS.filter(c => c !== "done" || showDone)
   const pinnedFirst = list => [...list].sort((a, b) => Number(b.pinned) - Number(a.pinned))
   if (view === "board" && groupBy === "repo")
@@ -75,6 +81,9 @@ function App() {
   useEffect(() => {
     get("/api/setup").then(res => res && !res.isReady && !load("setupSeen", false) && setDialog(d => d ?? "setup"))
   }, [])
+  // Cards that wait for you give a short shake now and then; "off" keeps them still.
+  const [shake, setShakeRaw] = useState(() => load("shake", "on"))
+  const setShake = v => (setShakeRaw(v), keep("shake", v))
   const [now, setNow] = useState(Date.now())
   const [chosenView, setViewRaw] = useState(load("view", "inbox"))
   const [repoFilter, setRepoFilterRaw] = useState(load("repoFilter", null))
@@ -86,6 +95,7 @@ function App() {
   // until its slide-out ends.
   const [shown, setShown] = useState(null)
   const [parkMenu, setParkMenu] = useState(null)
+  const [colorMenu, setColorMenu] = useState(null)
   const [dragging, setDragging] = useState(null)
   const [isSearching, setSearching] = useState(false) // the search palette is open
   const [opened, setOpened] = useState(null) // the search result last opened (a session not on the board)
@@ -220,7 +230,7 @@ function App() {
     const id = params.get("open")
     const linkedView = params.get("view")
     const linkedDialog = params.get("dialog")
-    if (["inbox", "board", "canvas"].includes(linkedView)) setViewRaw(linkedView)
+    if (["inbox", "board", "canvas", "tiers"].includes(linkedView)) setViewRaw(linkedView)
     if (["setup", "help", "new", "digest"].includes(linkedDialog)) setDialog(linkedDialog)
     if (id) openReader(id)
     if (id || linkedView || linkedDialog) history.replaceState(null, "", "/")
@@ -349,6 +359,8 @@ function App() {
     done: () => ({ column: "done", pinned: false }),
     archive: () => ({ column: "archived", pinned: false }),
     unseen: () => ({ column: "review", isUnread: true }),
+    color: p => ({ color: p.color || null }),
+    tier: p => ({ tier: p.tier || "other" }),
   }
   const INVERSE = { pin: "unpin", unpin: "pin", park: "unpark", done: "undone", archive: "unarchive", unseen: "seen" }
   const MESSAGES = { done: "Marked as done", park: "Moved to Later", pin: "Pinned", unpin: "Unpinned", archive: "Archived", unseen: "Marked to review" }
@@ -392,6 +404,14 @@ function App() {
     if (MESSAGES[action])
       toast(`${MESSAGES[action]}: ${card.title}`, inverse && (() => (forget([card.id]), post(`/api/sessions/${card.id}/${inverse}`))))
   }, [order, selected, showDone])
+
+  // The tier list: a row up or down, or to the one named. "Close" marks it done.
+  const moveToTier = useCallback(async (card, key) => {
+    const steps = toTier(card, key)
+    if (!steps) return
+    for (const [action, payload] of steps) await act(card, action, payload)
+    if (key !== "close" && key !== "paused") toast(`${TIERS.find(t => t.key === key).label}: ${card.title}`)
+  }, [act])
 
   const archiveAll = useCallback(async list => {
     const at = Date.now()
@@ -518,10 +538,10 @@ function App() {
   // The handler is added once and reads the newest state from a ref, so two
   // keys pressed between renders both see what the first one did.
   const latest = useRef({})
-  latest.current = { dialog, isSearching, parkMenu, reader, selected, cards, order, act, launch, openReader, nextUp }
+  latest.current = { dialog, isSearching, parkMenu, colorMenu, reader, selected, cards, order, act, launch, openReader, nextUp, view, moveToTier }
   useEffect(() => {
     const onKey = e => {
-      const { dialog, isSearching, parkMenu, reader, selected, cards, order, act, launch, openReader, nextUp } = latest.current
+      const { dialog, isSearching, parkMenu, colorMenu, reader, selected, cards, order, act, launch, openReader, nextUp, view, moveToTier } = latest.current
       if (dialog || isSearching) return // the palette handles its own keys
       const typing = isTyping(e.target)
       const cmdK = (e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k"
@@ -535,6 +555,7 @@ function App() {
       if (e.key === "Escape") {
         if (typing) e.target.blur()
         else if (parkMenu) setParkMenu(latest.current.parkMenu = null)
+        else if (colorMenu) setColorMenu(latest.current.colorMenu = null)
         else if (reader) (setReader((latest.current.reader = null)), setSelected((latest.current.selected = null)))
         else setSelected((latest.current.selected = null))
         return
@@ -550,6 +571,15 @@ function App() {
           return
         }
       }
+      if (colorMenu && card && /^[0-9]$/.test(e.key)) {
+        // 1–7 pick a colour, 0 takes it off; the views' 1 2 3 wait.
+        const color = e.key === "0" ? "" : CARD_COLORS[Number(e.key) - 1]?.key
+        if (color === undefined) return
+        e.preventDefault()
+        setColorMenu(null)
+        act(card, "color", { color })
+        return
+      }
       const move = step => {
         e.preventDefault()
         if (!order.length) return
@@ -557,6 +587,7 @@ function App() {
         const next = order[i === -1 ? (step > 0 ? 0 : order.length - 1) : Math.max(0, Math.min(order.length - 1, i + step))]
         setSelected((latest.current.selected = next.id))
         setParkMenu(null)
+        setColorMenu(null)
         if (reader) setReader(r => (latest.current.reader = { ...r, id: next.id }))
         // Focus on a card goes along, so Enter (or Space) there opens the selected one.
         const hasCardFocus = !!document.activeElement?.closest?.(".content [data-id]")
@@ -588,11 +619,21 @@ function App() {
         case "p": if (card) act(card, card.pinned ? "unpin" : "pin"); return
         case "a": if (card) card.column === "parked" ? act(card, "unpark") : card.column !== "done" && setParkMenu(m => (m ? null : card.id)); return
         case "e": if (card) act(card, card.column === "done" ? "undone" : "done"); return
+        case "c": if (card) setColorMenu(m => (m ? null : card.id)); return
         case "z": if (lastUndo.current) (lastUndo.current(), (lastUndo.current = null)); return
         case "g": return setGroupByRaw(g => (keep("groupBy", g === "repo" ? "none" : "repo"), g === "repo" ? "none" : "repo"))
         case "1": return setView("inbox")
         case "2": return setView("board")
         case "3": return setView("canvas")
+        case "4": return setView("tiers")
+        case "[": case "]": {
+          // On the tier list: the selected card one row up ([) or down (]).
+          if (!card || view !== "tiers") return
+          const i = TIERS.findIndex(t => t.key === tierOf(card))
+          const next = TIERS[i + (e.key === "[" ? -1 : 1)]
+          if (next) (e.preventDefault(), moveToTier(card, next.key))
+          return
+        }
         case "n": e.preventDefault(); return setDialog("new")
         case "f": e.preventDefault(); return nextUp()
         case "d": e.preventDefault(); return setDialog("digest")
@@ -631,8 +672,8 @@ function App() {
 
   // ---------- layout ----------
   const ui = {
-    now, selected, reader, parkMenu, dragging, taskSignal,
-    setParkMenu, setDragging, setView, setRepoFilter, act, archiveAll, launch, openReader, toast, dismissToast, newSession,
+    now, selected, reader, parkMenu, colorMenu, dragging, taskSignal,
+    setParkMenu, setColorMenu, setDragging, setView, setRepoFilter, act, moveToTier, archiveAll, launch, openReader, toast, dismissToast, newSession,
     reply, rename,
     closeReader: () => (setReader(null), setSelected(null)),
     setReaderTab: tab => setReader(r => ({ ...r, tab })),
@@ -645,6 +686,8 @@ function App() {
     stopSession,
     toggleNotify,
     toggleSound,
+    shake,
+    setShake,
     speech,
     setSpeech,
     toggleSpeech,
@@ -657,7 +700,7 @@ function App() {
   const repoName = repoFilter && data?.repos.find(r => r.root === repoFilter)?.name
 
   return html`<${Ctx.Provider} value=${ui}>
-    <div class=${`app ${reader ? "with-reader" : ""} ${view === "canvas" ? "on-canvas" : ""} ${isSideOpen ? "side-open" : ""} ${dragging ? "is-dragging" : ""}`}
+    <div class=${`app ${reader ? "with-reader" : ""} ${view === "canvas" ? "on-canvas" : ""} ${isSideOpen ? "side-open" : ""} ${dragging ? "is-dragging" : ""} ${shake === "off" ? "no-shake" : ""}`}
       style=${`--reader-w:${readerWidth}px`}>
       ${data ? html`<${Sidebar} data=${data} repoFilter=${repoFilter} view=${view} connected=${connected} notify=${notify} sound=${sound} />`
         : html`<aside class="sidebar"><div class="brand"><span class="logo"><i></i><i></i><i></i></span>Agent Center</div></aside>`}
@@ -665,7 +708,7 @@ function App() {
       <main class="main">
         <header class="topbar">
           <button class="icon-btn only-narrow" onClick=${() => setSideOpen(o => !o)} title="Menu"><${Icon} name="sidebar" /></button>
-          <h1>${{ board: "Board", canvas: "Canvas" }[view] ?? "Inbox"}${repoName && html`<button class="crumb" onClick=${() => setRepoFilter(null)}
+          <h1>${{ board: "Board", canvas: "Canvas", tiers: "Tiers" }[view] ?? "Inbox"}${repoName && html`<button class="crumb" onClick=${() => setRepoFilter(null)}
             title="You only see this repo. Click to see all">${repoName}<${Icon} name="x" size=${11} /></button>`}</h1>
           <button class="search" onClick=${() => setSearching(true)} title="Search all conversations (⌘K or /)">
             <${Icon} name="search" size=${15} /><span class="search-ph">Search…</span>
@@ -693,7 +736,9 @@ function App() {
             ? html`<div class="skeleton-rows">${[1, 2, 3, 4, 5].map(i => html`<i key=${i}></i>`)}</div>`
             : view === "board"
                 ? html`<${Board} cards=${cards} showDone=${showDone} groupBy=${groupBy} repos=${data.repos} />`
-                : view === "canvas"
+                : view === "tiers"
+                ? html`<${Tiers} cards=${cards} showDone=${showDone} />`
+              : view === "canvas"
                   ? html`<${Canvas} cards=${cards} zones=${data.zones ?? []} notes=${data.notes ?? []}
                       isDrawingZone=${isDrawingZone} onZoneDrawn=${() => setDrawingZone(false)} />`
                   : html`<${Inbox} cards=${cards} showDone=${showDone} />`}

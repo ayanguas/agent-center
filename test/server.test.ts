@@ -214,6 +214,46 @@ describe("board", () => {
     expect(Object.values(board.items).some((i: any) => i.title === "Renamed")).toBe(true)
   })
 
+  test("keeps the colour the person gives a session, and refuses one it does not know", async () => {
+    // The board refreshes a moment after each change.
+    const colorOnCard = async (want: string | null) => {
+      let color: unknown
+      for (let i = 0; i < 40; i++) {
+        color = (await jsonOf(fetch(`${base()}/api/state`))).cards.find((c: any) => c.id === ID)?.color
+        if (color === want) break
+        await Bun.sleep(50)
+      }
+      return color
+    }
+    expect((await post(`/api/sessions/${ID}/color`, { color: "lilac" })).status).toBe(200)
+    expect(await colorOnCard("lilac")).toBe("lilac")
+    expect((await post(`/api/sessions/${ID}/color`, { color: "plaid" })).status).toBe(400)
+    expect((await post(`/api/sessions/${ID}/color`, { color: "" })).status).toBe(200)
+    expect(await colorOnCard(null)).toBeNull()
+    const board = JSON.parse(await readFile(join(data, "board.json"), "utf8"))
+    expect(Object.values(board.items).some((i: any) => "color" in i)).toBe(false)
+  })
+
+  test("keeps the tier row the person gives a session, and refuses one it does not know", async () => {
+    const tierOnCard = async (want: string) => {
+      let tier: unknown
+      for (let i = 0; i < 40; i++) {
+        tier = (await jsonOf(fetch(`${base()}/api/state`))).cards.find((c: any) => c.id === ID)?.tier
+        if (tier === want) break
+        await Bun.sleep(50)
+      }
+      return tier
+    }
+    expect(await tierOnCard("other")).toBe("other")
+    expect((await post(`/api/sessions/${ID}/tier`, { tier: "fixes" })).status).toBe(200)
+    expect(await tierOnCard("fixes")).toBe("fixes")
+    expect((await post(`/api/sessions/${ID}/tier`, { tier: "legendary" })).status).toBe(400)
+    expect((await post(`/api/sessions/${ID}/tier`, { tier: "other" })).status).toBe(200)
+    expect(await tierOnCard("other")).toBe("other")
+    const board = JSON.parse(await readFile(join(data, "board.json"), "utf8"))
+    expect(Object.values(board.items).some((i: any) => "tier" in i)).toBe(false)
+  })
+
   test("reads aloud this turn's recap once, without hashes or paths", async () => {
     const id = "99999999-8888-7777-6666-555555555555"
     const at = (n: number) => new Date(Date.now() - n).toISOString()

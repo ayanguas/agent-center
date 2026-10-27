@@ -1,5 +1,5 @@
 // What the person decides on the board (pins, parks, done, archived, names,
-// canvas places, zones and notes), in data/board.json. This process is its
+// colours, tiers, canvas places, zones and notes), in data/board.json. This process is its
 // only writer: every change goes through here and is saved at once.
 
 import { readFile } from "node:fs/promises"
@@ -17,6 +17,8 @@ export type BoardItem = {
   archived_at?: number // out of the board until the session moves again
   seen_at?: number // the person last looked at it (opened it in the reader)
   title?: string // the person's own name for it, on the board only
+  color?: string // the person's own colour for it (CARD_COLORS), on every view
+  tier?: string // its row on the tier list (TIERS); absent: the "other" row
   pos?: { x: number; y: number } // where it sits on the canvas view
 }
 
@@ -27,6 +29,11 @@ export type Zone = { id: string; name: string; x: number; y: number; w: number; 
 // keeps x, y relative to that card, and moves with it.
 export type Note = { id: string; text: string; x: number; y: number; w: number; h: number; color: string; cardId: string | null }
 const NOTE_COLORS = ["yellow", "pink", "blue", "green"]
+// The colours a card can wear (public/js/components.js draws them).
+export const CARD_COLORS = ["lilac", "blue", "teal", "green", "yellow", "orange", "pink"]
+// The rows of the tier list, most important first (public/js/tiers.js names
+// them); its last row, "Close", is the done column and needs no tier.
+export const TIERS = ["main", "fixes", "searches", "other"]
 
 // seenEpoch: when "new since you looked" started; older activity is not new.
 export type Board = { items: Record<string, BoardItem>; seenEpoch?: number; zones?: Zone[]; notes?: Note[] }
@@ -59,7 +66,7 @@ export function itemOf(key: string, ids: string[]): BoardItem {
   return board.items[key] ?? ids.map(id => board.items[id]).find(Boolean) ?? {}
 }
 
-const ACTIONS = new Set(["pin", "unpin", "park", "unpark", "done", "undone", "archive", "unarchive", "seen", "unseen", "move", "rename"])
+const ACTIONS = new Set(["pin", "unpin", "park", "unpark", "done", "undone", "archive", "unarchive", "seen", "unseen", "move", "rename", "color", "tier"])
 export const isBoardAction = (action: string) => ACTIONS.has(action)
 
 // Applies one of ACTIONS to a group's item (`key`: the group's board key,
@@ -74,6 +81,12 @@ export async function applyAction(key: string, ids: string[], action: string, bo
     if (!Number.isFinite(x) || !Number.isFinite(y)) return "invalid position"
     pos = { x: Math.max(0, Math.round(x)), y: Math.max(0, Math.round(y)) }
   }
+  // An empty colour takes it off.
+  const color = action === "color" ? String(body.color ?? "") : ""
+  if (color && !CARD_COLORS.includes(color)) return `unknown colour: ${color}`
+  // An empty tier, or "other", puts it back in the default row.
+  const tier = action === "tier" ? String(body.tier ?? "") : ""
+  if (tier && !TIERS.includes(tier)) return `unknown tier: ${tier}`
   if (!board.items[key]) {
     const legacy = itemOf(key, ids)
     if (Object.keys(legacy).length) board.items[key] = { ...legacy }
@@ -129,6 +142,14 @@ export async function applyAction(key: string, ids: string[], action: string, bo
       else delete item.title
       break
     }
+    case "color":
+      if (color) item.color = color
+      else delete item.color
+      break
+    case "tier":
+      if (tier && tier !== "other") item.tier = tier
+      else delete item.tier
+      break
   }
   if (Object.keys(item).length === 0) delete board.items[key]
   await saveBoard()

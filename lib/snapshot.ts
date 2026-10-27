@@ -223,6 +223,8 @@ async function cardOf(
     parkedUntil: column === "parked" ? (item.parked_until ?? null) : null,
     taskCount: tasks.filter(t => ids.includes(sessionOf(t) ?? "")).length,
     pos: item.pos ?? null,
+    color: item.color ?? null,
+    tier: item.tier ?? "other",
     run: await runSummary(id),
     bridge: { ...bridge, wake: wakeState(id) },
   }
