@@ -736,27 +736,27 @@ mark { background: var(--ask-soft); color: var(--text); border-radius: 3px; padd
 }
 .ccard.dragging { z-index: 30; cursor: grabbing; box-shadow: var(--shadow-pop); transition: none; animation: none !important; }
 .ccard.selected, .ccard.reading { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
-.ccard-top { display: flex; align-items: flex-start; gap: 10px; min-width: 0; }
-.ccard-head { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-.csub { font-size: 11.5px; color: var(--faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.crepo { color: hsl(var(--hue) 55% var(--repo-l)); font-weight: 600; }
-.ccard .gist { font-size: 12.5px; line-height: 1.4; }
+/* State and title; one line of context (or the replies); a quiet foot: repo, age, signals. */
+.ccard-top { display: flex; align-items: flex-start; gap: 9px; min-width: 0; }
+.ccard-top .state-ico { margin-top: -1px; flex: none; }
+.ctitle { flex: 1; min-width: 0; font-weight: 600; font-size: 14px; line-height: 1.3; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow-wrap: anywhere; }
+.cunread { flex: none; width: 7px; height: 7px; margin-top: 6px; border-radius: 50%; background: var(--accent); }
+.ccard .gist { font-size: 12.5px; line-height: 1.4; color: var(--muted); }
+.ccard .gist.ask { color: var(--text); }
 .ccard .choices .choice { height: 24px; font-size: 11.5px; }
-.cchips { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; }
-.cchips .usage { margin-left: auto; }
-.ccard.state-done .cchips { display: none; }
-.ctitle { font-weight: 600; font-size: 14px; line-height: 1.3; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow-wrap: anywhere; }
-.ccard.unread .ctitle { font-weight: 750; }
+.ccard-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-width: 0; font-size: 11.5px; color: var(--faint); }
+.crepo { display: inline-flex; align-items: center; gap: 5px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.crepo i { flex: none; width: 7px; height: 7px; border-radius: 2px; background: hsl(var(--hue) 62% 55%); }
+.cage { flex: none; white-space: nowrap; }
+.csignals { margin-left: auto; display: flex; align-items: center; gap: 4px; flex: none; }
+.csignals:empty { display: none; }
+/* the signals stay small: an icon and a number; the words are in the tooltip */
+.csignals .tag, .csignals .pr { height: 20px; padding: 0 5px; gap: 3px; font-size: 11px; border: 0; background: var(--hover); }
+.csignals .overlap-chip span, .csignals .bg-chip { font-size: 0; }
+.csignals .bg-chip .dot { margin: 0; }
+.csignals .usage .bar { width: 22px; }
 
-/* the detail shows on hover / selection, floating under the card */
-.ccard-more {
-  position: absolute; left: -1px; right: -1px; top: calc(100% - 6px); padding: 10px 11px 9px; z-index: 1;
-  background: var(--raised); border: 1px solid var(--line); border-top: 0; border-radius: 0 0 12px 12px;
-  display: none; flex-direction: column; gap: 7px; box-shadow: var(--shadow);
-}
-.ccard-more:empty { display: none !important; }
-@media (hover: hover) { .ccard:hover:not(.dragging) { z-index: 20; } .ccard:hover:not(.dragging) .ccard-more { display: flex; } }
-.ccard.selected .ccard-more, .ccard.reading .ccard-more { display: flex; }
+@media (hover: hover) { .ccard:hover:not(.dragging) { z-index: 20; } }
 .ccard .actions {
   position: absolute; top: -12px; right: 8px; padding: 1px; background: var(--raised); border: 1px solid var(--line);
   border-radius: 8px; box-shadow: var(--shadow); opacity: 0; pointer-events: none; transition: opacity 120ms ease;
@@ -828,7 +828,7 @@ mark { background: var(--ask-soft); color: var(--text); border-radius: 3px; padd
 .ccard.state-done:hover, .ccard.state-done.selected, .ccard.state-done.reading, .ccard.state-done.dragging { opacity: 1; }
 .ccard.state-done .ctitle { font-weight: 550; }
 .ccard .pin { color: var(--ask); margin-left: auto; flex: none; }
-.ccard.state-done .ccard-more { display: none !important; }
+
 
 /* ============ quick replies, novelties, usage, titles ============ */
 
@@ -1738,3 +1738,15 @@ button.file-chip { cursor: pointer; font: inherit; font-size: 12.5px; }
 .slim-ring.tone-bad { --ring: var(--bad); color: var(--bad); }
 .app.slim .side-foot { flex-direction: column; gap: 8px; padding: 10px 0 0; }
 .app.slim .live { font-size: 0; }
+
+/* ============ canvas: semantic zoom (canvas.js levelOf) ============ */
+/* --unscale is 1 / zoom: text set in it keeps its size on screen. */
+.lod-mid .ccard .gist { --lines: 1 !important; }
+.lod-mid .ccard .csignals .tag:not(.overlap-chip), .lod-mid .ccard .usage { display: none; }
+.lod-far .ccard { gap: 6px; padding: 12px 14px; }
+.lod-far .ccard .gist:not(.ask), .lod-far .ccard .choices, .lod-far .ccard-foot .cage, .lod-far .ccard .csignals { display: none; }
+.lod-far .ccard .gist.ask { --lines: 2 !important; font-size: calc(12.5px * min(var(--unscale), 1.8)); }
+.lod-far .ctitle { font-size: calc(14px * min(var(--unscale), 2)); line-height: 1.2; }
+.lod-far .ccard-top .state-ico { --size: calc(22px * min(var(--unscale), 1.8)) !important; }
+.lod-far .ccard-foot { font-size: calc(11.5px * min(var(--unscale), 1.8)); }
+.lod-far .zone-name { font-size: calc(13px * min(var(--unscale), 2.2)); }

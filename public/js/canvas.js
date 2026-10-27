@@ -4,7 +4,7 @@
 // press ✓) to mark it done, lift it back up to reopen it. By default the
 // canvas fits the window, drawn smaller when it must; zoomed in, it scrolls.
 import { html, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "../vendor/preact-htm.js"
-import { Actions, BackgroundChip, Context, MEMORY_WARN, MemoryChip, NewBadge, OverlapChip, PendingChip, PrChip, StateIcon, UsageMeter, ageText, onOpenKey, stateOf, urgencyOf } from "./components.js"
+import { Actions, BackgroundChip, Context, MemoryChip, OverlapChip, PendingChip, PrChip, StateIcon, UsageMeter, ageText, onOpenKey, stateOf, urgencyOf } from "./components.js"
 import { CARD_H, CARD_W, ENTRY, GRID, dragHandler, layout, newZone, onCanvas, snap } from "./canvas-layout.js"
 import { Note, follow, keyOf, newNote } from "./canvas-notes.js"
 import { Ctx } from "./ctx.js"
@@ -15,6 +15,9 @@ import { origins, quietly } from "./motion.js"
 
 const MAX_ZOOM = 1.5 // 150 % of the cards' real size
 const MIN_ZOOM = 0.4 // zoomed out: more room around, cards at 40 %
+// Semantic zoom: what a card shows depends on how big it is drawn. Far, only
+// its state and title, drawn larger; mid, also one line of context; near, all.
+const levelOf = scale => (scale < 0.62 ? "lod-far" : scale < 0.85 ? "lod-mid" : "lod-near")
 
 function hashOf(id) {
   let h = 0
@@ -127,27 +130,29 @@ function CanvasCard({ card, at, scale, onDropped, z, isPicked = false, onPick, g
     style=${`left:${at.left ?? at.x}px;top:${at.top ?? at.y}px;--hue:${hue(card.repo)};animation-delay:${delay}s${z ? `;--z:${z}` : ""}`}
     tabindex="0" onPointerDown=${onPointerDown} onKeyDown=${onOpenKey(() => ui.openReader(card.id))}>
     <div class="ccard-top">
-      <${StateIcon} card=${card} size=${30} />
-      <div class="ccard-head">
-        <span class="ctitle">${card.title}</span>
-        <span class="csub"><span class="crepo">${card.repo}</span> · ${ageText(card, ui.now)}</span>
-      </div>
-      <${NewBadge} card=${card} />
+      <${StateIcon} card=${card} size=${22} />
+      <span class="ctitle" title=${card.title}>${card.title}</span>
       ${card.pinned && html`<span class="pin" title="Pinned"><${Icon} name="star" size=${12} /></span>`}
+      ${card.isUnread && html`<i class="cunread" title="New since you last looked"></i>`}
     </div>
     ${!isDone && html`<${Context} card=${card} lines=${2} />`}
-    ${(card.prs?.length > 0 || card.taskCount > 0 || card.bridge?.pending > 0 || card.usage || card.run || card.background?.length || card.memory?.total >= MEMORY_WARN || card.overlaps?.length) && html`<div class="cchips">
-      <${OverlapChip} card=${card} />
-      <${BackgroundChip} card=${card} />
-      <${MemoryChip} card=${card} />
-      <${RunChip} card=${card} />
-      ${card.prs?.map(pr => html`<${PrChip} key=${pr.url} pr=${pr} repo=${card.repo} cardId=${card.id} />`)}
-      ${card.taskCount > 0 && html`<button class="tag tasks" onClick=${e => (e.stopPropagation(), ui.openReader(card.id, "tasks"))}>
-        <${Icon} name="tasks" size=${12} />${card.taskCount} ${card.taskCount === 1 ? "task" : "tasks"}</button>`}
-      ${card.bridge?.pending > 0 && html`<${PendingChip} card=${card} />`}
-      <${UsageMeter} usage=${card.usage} />
-    </div>`}
-    ${!isDone && card.branch && html`<div class="ccard-more"><span class="branch">${card.branch}</span></div>`}
+    <footer class="ccard-foot">
+      <span class="crepo" title=${card.branch ? `${card.repo} · ${card.branch}` : card.repo}><i></i>${card.repo}</span>
+      <span class="cage">${ageText(card, ui.now)}</span>
+      ${!isDone && html`<span class="csignals">
+        <${OverlapChip} card=${card} />
+        <${BackgroundChip} card=${card} />
+        <${MemoryChip} card=${card} />
+        <${RunChip} card=${card} />
+        ${card.prs?.length === 1 && html`<${PrChip} pr=${card.prs[0]} repo=${card.repo} cardId=${card.id} />`}
+        ${card.prs?.length > 1 && html`<button class="tag" title=${card.prs.map(pr => `#${pr.number} ${pr.title}`).join("\n")}
+          onClick=${e => (e.stopPropagation(), ui.openReader(card.id, "prs"))}><${Icon} name="pr" size=${12} />${card.prs.length}</button>`}
+        ${card.taskCount > 0 && html`<button class="tag tasks" title=${`${card.taskCount} ${card.taskCount === 1 ? "task" : "tasks"}`}
+          onClick=${e => (e.stopPropagation(), ui.openReader(card.id, "tasks"))}><${Icon} name="tasks" size=${12} />${card.taskCount}</button>`}
+        ${card.bridge?.pending > 0 && html`<${PendingChip} card=${card} />`}
+        <${UsageMeter} usage=${card.usage} />
+      </span>`}
+    </footer>
     <${Actions} card=${card} compact />
   </article>`
 }
@@ -903,7 +908,7 @@ export function Canvas({ cards, zones: savedZones, notes: savedNotes, isDrawingZ
   return html`<div class="canvas-wrap" ref=${wrap}>
     <div class=${`canvas-frame ${isZoomed ? "zoomed" : ""}`} ref=${frame}>
     <div class="canvas-sizer" style=${`width:${width * scale}px;height:${height * scale}px`}>
-    <div class="canvas-area col-canvas" style=${`width:${width}px;height:${height}px;transform:scale(${scale});--unscale:${1 / scale}`}
+    <div class=${`canvas-area col-canvas ${levelOf(scale)}`} style=${`width:${width}px;height:${height}px;transform:scale(${scale});--unscale:${1 / scale}`}
       onPointerDown=${onBackground}
       onDblClick=${e => {
         // A double click on the empty canvas leaves a note there.
