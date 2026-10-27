@@ -398,7 +398,7 @@ function PermissionCard({ sessionId, permission }) {
   </div>`
 }
 
-export function Conversation({ id, card, pending, onDelivered, onUnsend, stuck = [], isOpen, untrusted, question, permission, failed = [] }) {
+export function Conversation({ id, card, pending, onDelivered, onUnsend, stuck = [], isOpen, isBusy, untrusted, atCap, question, permission, failed = [] }) {
   const ui = useContext(Ctx)
   // Answers to the question the session asks gather here until every question
   // of the call has one, then go together (one question: at the first click).
@@ -527,11 +527,13 @@ export function Conversation({ id, card, pending, onDelivered, onUnsend, stuck =
         ${failed.some(f => f.id === p.id)
           ? html`<span class="stamp stuck">Could not deliver: ${failed.find(f => f.id === p.id).reason} ·
               <button class="link-btn" onClick=${() => onUnsend(p)} title="Remove the message and put it back in the field">Undo</button></span>`
-          : stuck.includes(p.id) || untrusted
-          ? html`<span class="stamp stuck">${untrusted ? "Claude does not trust this session's folder: open it in Claude and accept" : "The session did not wake: open it in Claude"} ·
+          : stuck.includes(p.id) || untrusted || (atCap && !isOpen)
+          ? html`<span class="stamp stuck">${untrusted ? "Claude does not trust this session's folder: open it in Claude and accept"
+              : atCap ? "Claude is at its limit of open sessions for this Mac's memory and did not wake it: write it in Claude, or close sessions you are not using"
+              : "The session did not wake: open it in Claude"} ·
               <button class="link-btn" onClick=${() => ui.launch(id)} title="Opens the session in Claude desktop; when you write in it, it starts and gets the message">Open in Claude</button> ·
               <button class="link-btn" onClick=${() => onUnsend(p)}>Undo</button></span>`
-          : html`<span class="stamp">${card?.column === "working" ? "Queued: delivered when the turn ends" : isOpen ? "Sending…" : "Waking the session in the background…"}
+          : html`<span class="stamp">${card?.column === "working" || isBusy ? "Queued: delivered when the turn ends" : isOpen ? "Sending…" : "Waking the session in the background…"}
               · <button class="link-btn" onClick=${() => onUnsend(p)} title="Remove the message before it arrives and put it back in the field">Undo</button></span>`}</div>`,
     )}
     ${permission && html`<${PermissionCard} key=${permission.id} sessionId=${id} permission=${permission} />`}

@@ -328,6 +328,25 @@ describe("messages to the session", () => {
     expect((await jsonOf(fetch(`${base()}/api/sessions/${ID}/bridge`))).isArchived).toBe(false)
   })
 
+  test("says when Claude does not wake the session because it runs as many as it allows", async () => {
+    const sent = await jsonOf(post(`/api/sessions/${ID}/send`, { text: "wake up" }))
+    // What the client writes when its governor turns the background start down
+    // (in local time, which bun test and the server read in different zones: a
+    // day ahead is after the send in any of them).
+    const stamp = new Date(Date.now() + 86_400_000).toISOString().slice(0, 19).replace("T", " ")
+    await mkdir(join(home, "Library", "Logs", "Claude"), { recursive: true })
+    await writeFile(join(home, "Library", "Logs", "Claude", "main.log"),
+      `${stamp} [info] [CCD] Warming session local_demo\n${stamp} [info] [CliGovernor] at cap; yielding warm spawn\n`)
+    let wake: any = null
+    for (let i = 0; i < 40 && !wake?.atCap; i++) {
+      await Bun.sleep(250)
+      wake = (await jsonOf(fetch(`${base()}/api/sessions/${ID}/bridge`))).wake
+    }
+    expect(wake?.atCap).toBe(true)
+    expect(wake?.untrusted).toBe(false)
+    await post(`/api/sessions/${ID}/unsend`, { messageId: sent.messageId })
+  }, 15_000)
+
   test("refuses an empty message", async () => {
     expect((await post(`/api/sessions/${ID}/send`, { text: "   " })).status).toBe(400)
   })
