@@ -19,7 +19,9 @@ export function Sidebar({ data, repoFilter, view, connected, notify, sound }) {
   return html`<aside class="sidebar">
     <div class="brand">
       <span class="logo"><i></i><i></i><i></i></span>
-      <span>Agent Center</span>
+      <span class="brand-name">Agent Center</span>
+      <button class="ghost-btn side-toggle" onClick=${() => ui.toggleSlim()} title=${ui.isSlim ? "Show the sidebar" : "Fold the sidebar to icons"}>
+        <${Icon} name="sidebar" size=${15} /></button>
     </div>
     <div class="side-actions">
       <button class="btn primary" onClick=${() => ui.openDialog("new")} title="New session (N)">
@@ -53,6 +55,7 @@ export function Sidebar({ data, repoFilter, view, connected, notify, sound }) {
       )}
     </nav>
     <${Limits} limits=${data.limits} cards=${data.cards} />
+    <${SlimLimits} limits=${data.limits} />
     <${SessionsMemory} data=${data} />
     <button class=${`side-uploads ${uploadsTone}`} title="Open the sent files folder in Finder"
       onClick=${async () => !(await post("/api/uploads/open")).body.ok && ui.toast("Could not open the folder")}>
@@ -68,7 +71,7 @@ export function Sidebar({ data, repoFilter, view, connected, notify, sound }) {
       <button class=${`ghost-btn ${ui.speech.mode !== "off" ? "on" : ""}`} onClick=${() => ui.toggleSpeech()}
         title=${ui.speech.mode !== "off" ? `Read aloud on (${ui.speech.mode === "all" ? "every session" : "sessions with the bell"}): the Mac says what a session did when its turn ends. Click to turn it off` : "Read aloud what a session did when its turn ends (voice and speed in Setup)"}>
         <${Icon} name="voice" size=${15} /></button>
-      <button class="ghost-btn" onClick=${() => ui.openDialog("setup")} title="Setup: hook, mod, dictation, tasks…">
+      <button class="ghost-btn keep" onClick=${() => ui.openDialog("setup")} title="Setup: hook, mod, dictation, tasks…">
         <${Icon} name="gear" size=${15} /></button>
       <button class="ghost-btn" onClick=${() => ui.openDialog("help")} title="Keyboard shortcuts (?)">
         <${Icon} name="keyboard" size=${15} /><${Kbd}>?<//>
@@ -121,6 +124,16 @@ function SessionsMemory({ data }) {
 }
 
 // ---------- the plan's limits ----------
+
+// The folded sidebar's limits: a ring per window, its use inside.
+function SlimLimits({ limits }) {
+  if (!limits?.windows?.length) return null
+  return html`<div class="slim-limits">${limits.windows.map(w => {
+    const pct = Math.round(w.percentUsed)
+    const tone = pct >= 90 ? "bad" : pct >= 70 ? "ask" : "ok"
+    return html`<span key=${w.kind} class=${`slim-ring tone-${tone}`} style=${`--v:${Math.min(100, pct)}`} title=${`${LIMIT_NAME[w.kind] ?? w.kind}: ${pct}% used`}>${pct}</span>`
+  })}</div>`
+}
 
 const WINDOW_MS = { five_hour: 5 * 3600_000, seven_day: 7 * 86400_000, seven_day_opus: 7 * 86400_000, seven_day_sonnet: 7 * 86400_000 }
 

@@ -1709,3 +1709,32 @@ button.file-chip { cursor: pointer; font: inherit; font-size: 12.5px; }
 .st-D .code-name { color: var(--bad); text-decoration: line-through; }
 .code-st.st-D { color: var(--bad); }
 .code-note { flex: none; display: inline-flex; align-items: center; gap: 2px; font-size: 10.5px; color: var(--ask); }
+
+/* ============ the sidebar folded to icons ============ */
+.side-toggle { margin-left: auto; }
+.slim-limits { display: none; }
+.app.slim { --side-w: 60px; }
+.app.slim .sidebar { padding: 14px 8px 10px; align-items: stretch; }
+.app.slim .brand { flex-direction: column; gap: 12px; padding: 2px 0 14px; }
+.app.slim .brand-name, .app.slim .side-title, .app.slim .side-limits, .app.slim .mem-forgotten, .app.slim .mem-list,
+.app.slim .side-foot .ghost-btn:not(.keep), .app.slim kbd, .app.slim .mem-pressure { display: none; }
+.app.slim .side-toggle { margin: 0; }
+/* the buttons keep their icon; their words go */
+.app.slim .side-actions .btn, .app.slim .nav button, .app.slim .side-uploads { justify-content: center; font-size: 0; gap: 0; padding: 0; position: relative; }
+.app.slim .side-actions .btn { height: 34px; }
+.app.slim .nav .pill { position: absolute; top: 1px; right: 2px; min-width: 16px; height: 15px; padding: 0 4px; font-size: 10px; }
+.app.slim .nav .pill.new { display: none; }
+.app.slim .nav .n { display: none; }
+.app.slim .nav.repos { margin: 8px 0 0; padding: 0; }
+.app.slim .side-uploads .n { position: absolute; bottom: -2px; font-size: 9.5px; }
+.app.slim .slim-limits { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 10px 0; }
+.slim-ring {
+  --v: 0; display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%;
+  font-size: 10.5px; font-weight: 650; font-variant-numeric: tabular-nums; color: var(--muted);
+  background: radial-gradient(circle, var(--side) 12px, transparent 12.5px), conic-gradient(var(--ring) calc(var(--v) * 1%), var(--line-strong) 0);
+}
+.slim-ring.tone-ok { --ring: var(--muted); }
+.slim-ring.tone-ask { --ring: var(--ask); color: var(--ask); }
+.slim-ring.tone-bad { --ring: var(--bad); color: var(--bad); }
+.app.slim .side-foot { flex-direction: column; gap: 8px; padding: 10px 0 0; }
+.app.slim .live { font-size: 0; }

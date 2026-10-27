@@ -42,7 +42,7 @@ function walkOrder(view, cards, showDone, groupBy, repos) {
 
 // The reader's tabs that need the whole width: they open as a workspace.
 const WORKSPACES = new Set(["changes", "code", "files"])
-const SIDE_W = 256 // the sidebar's width (styles.css --side-w)
+const SIDE_W = { full: 256, slim: 60 } // the sidebar's width (styles.css --side-w)
 
 function App() {
   const [data, setData] = useState(null)
@@ -104,6 +104,9 @@ function App() {
   // after the expand button, else the default. The same for every tab.
   const [readerW, setReaderWRaw] = useState(() => load("readerW", null))
   const [isWide, setWide] = useState(false)
+  // The sidebar folded to icons, for the canvas's room. Kept in this browser.
+  const [isSlim, setSlimRaw] = useState(() => load("sideSlim", false))
+  const toggleSlim = () => setSlimRaw(s => (keep("sideSlim", !s), !s))
   const [needsRoom, setNeedsRoom] = useState(false) // a view inside asks for width (Changes side by side)
   const [vw, setVw] = useState(window.innerWidth)
   useEffect(() => {
@@ -617,7 +620,7 @@ function App() {
   const baseW = readerW ?? Math.min(760, Math.max(420, Math.round(vw * 0.42)))
   const isWorkspace = WORKSPACES.has(shown?.tab)
   const wantsWide = isWide || needsRoom
-  const readerWidth = isWorkspace ? vw - SIDE_W : Math.min(vw - 300, wantsWide ? Math.max(baseW, Math.round(vw * 0.75)) : baseW)
+  const readerWidth = isWorkspace ? vw - (isSlim ? SIDE_W.slim : SIDE_W.full) : Math.min(vw - 300, wantsWide ? Math.max(baseW, Math.round(vw * 0.75)) : baseW)
   const resizeReader = e => {
     e.preventDefault()
     const app = e.currentTarget.closest(".app")
@@ -653,6 +656,8 @@ function App() {
     openRun: card => setRunFor(card),
     toggleWide: () => setWide(w => !w),
     setNeedsRoom,
+    isSlim,
+    toggleSlim,
     stopSession,
     toggleNotify,
     toggleSound,
@@ -668,7 +673,7 @@ function App() {
   const repoName = repoFilter && data?.repos.find(r => r.root === repoFilter)?.name
 
   return html`<${Ctx.Provider} value=${ui}>
-    <div class=${`app ${reader ? "with-reader" : ""} ${view === "canvas" ? "on-canvas" : ""} ${isSideOpen ? "side-open" : ""} ${dragging ? "is-dragging" : ""}`}
+    <div class=${`app ${reader ? "with-reader" : ""} ${view === "canvas" ? "on-canvas" : ""} ${isSideOpen ? "side-open" : ""} ${dragging ? "is-dragging" : ""} ${isSlim ? "slim" : ""}`}
       style=${`--reader-w:${readerWidth}px`}>
       ${data ? html`<${Sidebar} data=${data} repoFilter=${repoFilter} view=${view} connected=${connected} notify=${notify} sound=${sound} />`
         : html`<aside class="sidebar"><div class="brand"><span class="logo"><i></i><i></i><i></i></span>Agent Center</div></aside>`}
